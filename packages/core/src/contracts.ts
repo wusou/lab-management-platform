@@ -1,0 +1,112 @@
+export type Role = "super_admin" | "admin" | "member";
+
+export type Permission =
+  | "user:read"
+  | "user:write"
+  | "inventory:read"
+  | "inventory:write"
+  | "file:read"
+  | "file:write"
+  | "project:read"
+  | "project:write"
+  | "meeting:read"
+  | "meeting:write"
+  | "ai:use";
+
+export interface Actor {
+  id: string;
+  role: Role;
+  permissions: Permission[];
+}
+
+export interface AuthPort {
+  authenticate(token: string): Promise<Actor | null>;
+  assertPermission(actor: Actor, permission: Permission): void;
+}
+
+export interface AuditPort {
+  record(entry: AuditEntry): Promise<void>;
+}
+
+export interface AuditEntry {
+  actorId: string;
+  action: string;
+  targetType: string;
+  targetId?: string;
+  metadata?: Record<string, string | number | boolean>;
+  occurredAt: string;
+}
+
+export interface RouteDefinition {
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  path: string;
+  permission?: Permission;
+  summary: string;
+}
+
+export interface DomainEvent<TPayload extends object = object> {
+  id: string;
+  type: string;
+  version: number;
+  occurredAt: string;
+  source: string;
+  payload: TPayload;
+}
+
+export interface EventBus {
+  publish<TPayload extends object>(event: DomainEvent<TPayload>): Promise<void>;
+  subscribe<TPayload extends object>(
+    eventType: string,
+    handler: (event: DomainEvent<TPayload>) => Promise<void> | void
+  ): () => void;
+}
+
+export interface PluginContext {
+  eventBus: EventBus;
+  auth: AuthPort;
+  audit: AuditPort;
+  logger: LoggerPort;
+}
+
+export interface LoggerPort {
+  info(message: string, meta?: Record<string, unknown>): void;
+  warn(message: string, meta?: Record<string, unknown>): void;
+  error(message: string, meta?: Record<string, unknown>): void;
+}
+
+export interface PluginManifest {
+  name: string;
+  version: string;
+  description: string;
+  capabilities: string[];
+  routes: RouteDefinition[];
+  eventsPublished: string[];
+  eventsSubscribed: string[];
+  activate(context: PluginContext): Promise<ActivatedPlugin>;
+}
+
+export interface ActivatedPlugin {
+  name: string;
+  routes: RegisteredRoute[];
+  dispose?: () => Promise<void> | void;
+}
+
+export interface RegisteredRoute extends RouteDefinition {
+  handler: RouteHandler;
+}
+
+export interface RouteHandlerRequest<TBody = unknown, TQuery = unknown> {
+  actor: Actor | null;
+  body: TBody;
+  query: TQuery;
+  params: Record<string, string>;
+}
+
+export interface RouteHandlerResponse {
+  status?: number;
+  body: unknown;
+}
+
+export type RouteHandler<TBody = unknown, TQuery = unknown> = (
+  request: RouteHandlerRequest<TBody, TQuery>
+) => Promise<RouteHandlerResponse> | RouteHandlerResponse;

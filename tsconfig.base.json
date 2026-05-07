@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@lab/core": ["packages/core/src/index.ts"],
+      "@lab/contracts": ["packages/contracts/src/index.ts"],
+      "@lab/plugin-hello-world": ["plugins/hello-world/src/index.ts"],
+      "@lab/plugin-inventory": ["plugins/inventory/src/index.ts"]
+    }
+  }
+}

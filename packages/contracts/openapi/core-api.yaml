@@ -1,0 +1,265 @@
+openapi: 3.1.0
+info:
+  title: Lab Management Platform Core API
+  version: 0.1.0
+  description: 核心宿主与插件公开 HTTP 契约。跨模块调用必须依赖此类契约，不得依赖实现代码或数据库。
+servers:
+  - url: http://localhost:3000
+paths:
+  /health:
+    get:
+      summary: 平台健康检查与已加载插件列表
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, plugins]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  plugins:
+                    type: array
+                    items:
+                      type: string
+  /plugins/hello-world:
+    get:
+      summary: HelloWorld 示例插件
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message:
+                    type: string
+  /inventory/applications:
+    get:
+      summary: 获取耗材申请列表
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryApplication"
+    post:
+      summary: 提交耗材或设备申请
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [materialId, quantity]
+              properties:
+                materialId:
+                  type: string
+                quantity:
+                  type: integer
+                  minimum: 1
+      responses:
+        "202":
+          description: 申请已接收，后续由审批流处理
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [applicationId, status]
+                properties:
+                  applicationId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [pending]
+        "401":
+          description: 未认证
+        "400":
+          description: 请求数据不合法
+  /inventory/summary:
+    get:
+      summary: 获取耗材管理统计
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [materialCount, lowStockCount, pendingApplications, approvedApplications]
+                properties:
+                  materialCount:
+                    type: integer
+                  lowStockCount:
+                    type: integer
+                  pendingApplications:
+                    type: integer
+                  approvedApplications:
+                    type: integer
+  /inventory/materials:
+    get:
+      summary: 获取耗材库存列表
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Material"
+  /inventory/applications/{id}/approve:
+    patch:
+      summary: 管理员批准耗材申请
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                remark:
+                  type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryApplication"
+  /inventory/applications/{id}/reject:
+    patch:
+      summary: 管理员拒绝耗材申请
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                remark:
+                  type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryApplication"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    DomainEvent:
+      type: object
+      required: [id, type, version, occurredAt, source, payload]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+        version:
+          type: integer
+        occurredAt:
+          type: string
+          format: date-time
+        source:
+          type: string
+        payload:
+          type: object
+    Material:
+      type: object
+      required: [id, name, spec, stock, warnStock, unit, location, manager]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        spec:
+          type: string
+        stock:
+          type: integer
+        warnStock:
+          type: integer
+        unit:
+          type: string
+        location:
+          type: string
+        manager:
+          type: string
+    InventoryApplication:
+      type: object
+      required:
+        [
+          id,
+          materialId,
+          materialName,
+          applicantId,
+          applicantName,
+          quantity,
+          reason,
+          status,
+          createdAt
+        ]
+      properties:
+        id:
+          type: string
+        materialId:
+          type: string
+        materialName:
+          type: string
+        applicantId:
+          type: string
+        applicantName:
+          type: string
+        quantity:
+          type: integer
+        reason:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        createdAt:
+          type: string
+          format: date-time
+        reviewedAt:
+          type: string
+          format: date-time
+        reviewRemark:
+          type: string

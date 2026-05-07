@@ -16,9 +16,13 @@ CREATE TABLE IF NOT EXISTS core.audit_log (
 CREATE TABLE IF NOT EXISTS core.app_user (
   id TEXT PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,
+  phone TEXT UNIQUE,
+  student_id TEXT UNIQUE,
   password_hash TEXT NOT NULL,
   display_name TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('super_admin', 'admin', 'member')),
+  identity_provider TEXT NOT NULL DEFAULT 'local',
+  external_subject TEXT,
   active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

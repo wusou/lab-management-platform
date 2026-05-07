@@ -16,7 +16,7 @@ app.get("/health", async () => ({
 app.post("/auth/login", async (request, reply) => {
   const body = request.body as Partial<{ username: string; password: string }>;
   if (!body.username || !body.password) {
-    return reply.code(400).send({ error: "username and password are required" });
+    return reply.code(400).send({ error: "login identifier and password are required" });
   }
 
   const session = await kernel.login(body.username, body.password);
@@ -37,6 +37,194 @@ app.get("/auth/me", async (request, reply) => {
   }
 
   return actor;
+});
+
+app.get("/auth/profile", async (request, reply) => {
+  const authorization = Array.isArray(request.headers.authorization)
+    ? request.headers.authorization[0]
+    : request.headers.authorization;
+  const actor = await kernel.authenticate(authorization ?? "");
+  if (!actor) {
+    return reply.code(401).send({ error: "Unauthorized" });
+  }
+
+  const profile = await kernel.getUserProfile(actor.id);
+  if (!profile) {
+    return reply.code(404).send({ error: "User profile not found" });
+  }
+  return profile;
+});
+
+app.patch("/auth/profile/contact", async (request, reply) => {
+  const authorization = Array.isArray(request.headers.authorization)
+    ? request.headers.authorization[0]
+    : request.headers.authorization;
+  const actor = await kernel.authenticate(authorization ?? "");
+  if (!actor) {
+    return reply.code(401).send({ error: "Unauthorized" });
+  }
+
+  const body = request.body as Partial<{ phone: string }>;
+  if (!body.phone) {
+    return reply.code(400).send({ error: "phone is required" });
+  }
+
+  try {
+    return await kernel.updateContact(actor.id, body.phone);
+  } catch (error) {
+    return reply
+      .code(error instanceof Error && error.message.includes("exists") ? 409 : 400)
+      .send({ error: error instanceof Error ? error.message : "contact update failed" });
+  }
+});
+
+app.patch("/auth/profile/password", async (request, reply) => {
+  const authorization = Array.isArray(request.headers.authorization)
+    ? request.headers.authorization[0]
+    : request.headers.authorization;
+  const actor = await kernel.authenticate(authorization ?? "");
+  if (!actor) {
+    return reply.code(401).send({ error: "Unauthorized" });
+  }
+
+  const body = request.body as Partial<{ currentPassword: string; newPassword: string }>;
+  if (!body.currentPassword || !body.newPassword) {
+    return reply.code(400).send({ error: "currentPassword and newPassword are required" });
+  }
+
+  try {
+    await kernel.changePassword(actor.id, body.currentPassword, body.newPassword);
+    return { ok: true };
+  } catch (error) {
+    return reply
+      .code(error instanceof Error && error.message.includes("incorrect") ? 403 : 400)
+      .send({ error: error instanceof Error ? error.message : "password change failed" });
+  }
+});
+
+app.get("/auth/users", async (request, reply) => {
+  const authorization = Array.isArray(request.headers.authorization)
+    ? request.headers.authorization[0]
+    : request.headers.authorization;
+  const actor = await kernel.authenticate(authorization ?? "");
+  if (!actor) {
+    return reply.code(401).send({ error: "Unauthorized" });
+  }
+
+  try {
+    kernel.assertPermission(actor, "user:read");
+  } catch {
+    return reply.code(403).send({ error: "Permission denied: user:read" });
+  }
+
+  const query = request.query as Partial<{ search: string }>;
+  return kernel.listUsers(query.search);
+});
+
+app.post("/auth/register", async (request, reply) => {
+  const authorization = Array.isArray(request.headers.authorization)
+    ? request.headers.authorization[0]
+    : request.headers.authorization;
+  const actor = await kernel.authenticate(authorization ?? "");
+  if (!actor) {
+    return reply.code(401).send({ error: "Unauthorized" });
+  }
+
+  try {
+    kernel.assertPermission(actor, "user:write");
+  } catch {
+    return reply.code(403).send({ error: "Permission denied: user:write" });
+  }
+
+  const body = request.body as Partial<{
+    username: string;
+    password: string;
+    studentId: string;
+    displayName: string;
+    role: "admin" | "member";
+  }>;
+
+  if (!body.username || !body.password || !body.studentId || !body.displayName || !body.role) {
+    return reply
+      .code(400)
+      .send({ error: "username, password, studentId, displayName and role are required" });
+  }
+
+  try {
+    const user = await kernel.registerLocalUser({
+      username: body.username,
+      password: body.password,
+      studentId: body.studentId,
+      displayName: body.displayName,
+      role: body.role
+    });
+    return reply.code(201).send(user);
+  } catch (error) {
+    return reply
+      .code(error instanceof Error && error.message.includes("exists") ? 409 : 400)
+      .send({ error: error instanceof Error ? error.message : "registration failed" });
+  }
+});
+
+app.patch("/auth/users/:id/password", async (request, reply) => {
+  const authorization = Array.isArray(request.headers.authorization)
+    ? request.headers.authorization[0]
+    : request.headers.authorization;
+  const actor = await kernel.authenticate(authorization ?? "");
+  if (!actor) {
+    return reply.code(401).send({ error: "Unauthorized" });
+  }
+
+  try {
+    kernel.assertPermission(actor, "user:write");
+  } catch {
+    return reply.code(403).send({ error: "Permission denied: user:write" });
+  }
+
+  const params = request.params as { id: string };
+  const body = request.body as Partial<{ newPassword: string }>;
+  if (!body.newPassword) {
+    return reply.code(400).send({ error: "newPassword is required" });
+  }
+
+  try {
+    await kernel.resetUserPassword(params.id, body.newPassword);
+    return { ok: true };
+  } catch (error) {
+    return reply
+      .code(error instanceof Error && error.message.includes("not found") ? 404 : 400)
+      .send({ error: error instanceof Error ? error.message : "password reset failed" });
+  }
+});
+
+app.delete("/auth/users/:id", async (request, reply) => {
+  const authorization = Array.isArray(request.headers.authorization)
+    ? request.headers.authorization[0]
+    : request.headers.authorization;
+  const actor = await kernel.authenticate(authorization ?? "");
+  if (!actor) {
+    return reply.code(401).send({ error: "Unauthorized" });
+  }
+
+  try {
+    kernel.assertPermission(actor, "user:write");
+  } catch {
+    return reply.code(403).send({ error: "Permission denied: user:write" });
+  }
+
+  const params = request.params as { id: string };
+  if (params.id === actor.id) {
+    return reply.code(400).send({ error: "cannot delete current user" });
+  }
+
+  try {
+    await kernel.deactivateUser(params.id);
+    return { ok: true };
+  } catch (error) {
+    return reply
+      .code(error instanceof Error && error.message.includes("not found") ? 404 : 400)
+      .send({ error: error instanceof Error ? error.message : "user deletion failed" });
+  }
 });
 
 app.get("/events", async (request, reply) => {

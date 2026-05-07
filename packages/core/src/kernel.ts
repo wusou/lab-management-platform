@@ -4,7 +4,9 @@ import type {
   AuditPort,
   AuthPort,
   DomainEvent,
+  LocalUserRegistrationRequest,
   LoggerPort,
+  ManagedUser,
   PluginManifest,
   RegisteredRoute
 } from "./contracts.js";
@@ -53,6 +55,56 @@ export class Kernel {
 
   async login(username: string, password: string): Promise<{ token: string; actor: Actor } | null> {
     return this.options.auth.login?.(username, password) ?? null;
+  }
+
+  async registerLocalUser(request: LocalUserRegistrationRequest): Promise<Actor> {
+    if (!this.options.auth.registerLocalUser) {
+      throw new Error("Local registration is disabled");
+    }
+    return this.options.auth.registerLocalUser(request);
+  }
+
+  async listUsers(search?: string): Promise<ManagedUser[]> {
+    if (!this.options.auth.listUsers) {
+      return [];
+    }
+    return this.options.auth.listUsers(search);
+  }
+
+  async getUserProfile(actorId: string): Promise<ManagedUser | null> {
+    return this.options.auth.getUserProfile?.(actorId) ?? null;
+  }
+
+  async changePassword(
+    actorId: string,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<void> {
+    if (!this.options.auth.changePassword) {
+      throw new Error("Password change is disabled");
+    }
+    await this.options.auth.changePassword(actorId, currentPassword, newPassword);
+  }
+
+  async updateContact(actorId: string, phone: string): Promise<ManagedUser> {
+    if (!this.options.auth.updateContact) {
+      throw new Error("Contact update is disabled");
+    }
+    return this.options.auth.updateContact(actorId, phone);
+  }
+
+  async resetUserPassword(targetUserId: string, newPassword: string): Promise<void> {
+    if (!this.options.auth.resetUserPassword) {
+      throw new Error("Password reset is disabled");
+    }
+    await this.options.auth.resetUserPassword(targetUserId, newPassword);
+  }
+
+  async deactivateUser(targetUserId: string): Promise<void> {
+    if (!this.options.auth.deactivateUser) {
+      throw new Error("User deletion is disabled");
+    }
+    await this.options.auth.deactivateUser(targetUserId);
   }
 
   assertPermission(actor: Actor, permission: RegisteredRoute["permission"]): void {

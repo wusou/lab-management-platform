@@ -6,11 +6,13 @@ import {
   Database,
   FileText,
   FlaskConical,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   PackageCheck,
   Send,
   ShieldCheck,
+  Smartphone,
   Users,
   XCircle
 } from "lucide-react";
@@ -62,7 +64,22 @@ interface Summary {
   approvedApplications: number;
 }
 
+interface ManagedUser {
+  id: string;
+  username: string;
+  studentId?: string;
+  phone?: string;
+  displayName: string;
+  role: Role;
+  identityProvider: string;
+  active: boolean;
+  createdAt: string;
+}
+
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000";
+const applicationPreviewLimit = 8;
+const accountPreviewLimit = 10;
+const defaultResetPassword = "Student@123456";
 
 function statusText(status: ApplicationStatus) {
   return {
@@ -90,6 +107,8 @@ function App() {
   const [password, setPassword] = useState("Admin@123456");
   const [materials, setMaterials] = useState<Material[]>([]);
   const [applications, setApplications] = useState<InventoryApplication[]>([]);
+  const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [profile, setProfile] = useState<ManagedUser | null>(null);
   const [summary, setSummary] = useState<Summary>({
     materialCount: 0,
     lowStockCount: 0,
@@ -102,8 +121,24 @@ function App() {
   const [reason, setReason] = useState("课题实验耗材申请");
   const [message, setMessage] = useState("请登录后开始使用。");
   const [loading, setLoading] = useState(false);
+  const [registerUsername, setRegisterUsername] = useState("student002");
+  const [registerPassword, setRegisterPassword] = useState("Student@123456");
+  const [registerStudentId, setRegisterStudentId] = useState("S000002");
+  const [registerDisplayName, setRegisterDisplayName] = useState("学生二号");
+  const [registerRole, setRegisterRole] = useState<"admin" | "member">("member");
+  const [accountTab, setAccountTab] = useState<"profile" | "security" | "list" | "register">(
+    "profile"
+  );
+  const [userSearch, setUserSearch] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showAllApplications, setShowAllApplications] = useState(false);
+  const [showAllAccounts, setShowAllAccounts] = useState(false);
 
   const canApprove = actor?.permissions.includes("inventory:write") ?? false;
+  const canManageUsers = actor?.permissions.includes("user:write") ?? false;
 
   function headers(activeToken = token) {
     return {
@@ -132,6 +167,7 @@ function App() {
       sessionStorage.setItem("lab_actor", JSON.stringify(payload.actor));
       setMessage(`欢迎回来，${payload.actor.displayName}`);
       await loadData(payload.token);
+      await loadProfile(payload.token);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "登录失败");
     } finally {
@@ -167,6 +203,37 @@ function App() {
     setApplications(await applicationsResponse.json());
   }
 
+  async function loadUsers(search = userSearch, activeToken = token) {
+    if (!activeToken || !canManageUsers) {
+      return;
+    }
+
+    const response = await fetch(`${apiBase}/auth/users?search=${encodeURIComponent(search)}`, {
+      headers: headers(activeToken)
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error ?? "账号列表加载失败");
+    }
+    setUsers(payload);
+  }
+
+  async function loadProfile(activeToken = token) {
+    if (!activeToken) {
+      return;
+    }
+
+    const response = await fetch(`${apiBase}/auth/profile`, {
+      headers: headers(activeToken)
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error ?? "个人资料加载失败");
+    }
+    setProfile(payload);
+    setContactPhone(payload.phone ?? "");
+  }
+
   useEffect(() => {
     loadData().catch((error: unknown) => {
       setMessage(error instanceof Error ? error.message : "系统连接失败");
@@ -181,6 +248,9 @@ function App() {
     const refresh = () => {
       loadData(token).catch(() => {
         // Background refresh should not interrupt the user's current workflow.
+      });
+      loadProfile(token).catch(() => {
+        // Profile refresh is best-effort for background updates.
       });
     };
     refresh();
@@ -198,6 +268,21 @@ function App() {
     };
   }, [token]);
 
+  useEffect(() => {
+    if (!canManageUsers) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShowAllAccounts(false);
+      loadUsers().catch((error: unknown) => {
+        setMessage(error instanceof Error ? error.message : "账号列表加载失败");
+      });
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [canManageUsers, userSearch, token]);
+
   const selectedMaterial = useMemo(
     () => materials.find((material) => material.id === selectedMaterialId),
     [materials, selectedMaterialId]
@@ -209,6 +294,12 @@ function App() {
   const visibleApplications = canApprove
     ? applications
     : applications.filter((application) => application.applicantId === actor?.id);
+  const displayedApplications = showAllApplications
+    ? visibleApplications
+    : visibleApplications.slice(0, applicationPreviewLimit);
+  const hasMoreApplications = visibleApplications.length > applicationPreviewLimit;
+  const displayedUsers = showAllAccounts ? users : users.slice(0, accountPreviewLimit);
+  const hasMoreUsers = users.length > accountPreviewLimit;
 
   async function submitApplication(event: FormEvent) {
     event.preventDefault();
@@ -306,6 +397,148 @@ function App() {
     }
   }
 
+  async function registerUser(event: FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    try {
+      const response = await fetch(`${apiBase}/auth/register`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({
+          username: registerUsername,
+          password: registerPassword,
+          studentId: registerStudentId,
+          displayName: registerDisplayName,
+          role: registerRole
+        })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error ?? "注册失败");
+      }
+
+      setMessage(`已创建账号：${payload.displayName} / ${payload.username}`);
+      setRegisterUsername("");
+      setRegisterPassword("");
+      setRegisterStudentId("");
+      setRegisterDisplayName("");
+      setRegisterRole("member");
+      setAccountTab("list");
+      await loadUsers("");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "注册失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function updateContact(event: FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    try {
+      const response = await fetch(`${apiBase}/auth/profile/contact`, {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({ phone: contactPhone })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error ?? "手机号更新失败");
+      }
+      setProfile(payload);
+      setContactPhone(payload.phone ?? "");
+      setMessage("绑定手机已更新。");
+      if (canManageUsers) {
+        await loadUsers();
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "手机号更新失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function changePassword(event: FormEvent) {
+    event.preventDefault();
+    if (newPassword !== confirmPassword) {
+      setMessage("两次输入的新密码不一致。");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${apiBase}/auth/profile/password`, {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({ currentPassword, newPassword })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error ?? "密码修改失败");
+      }
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setMessage("密码已修改，下次登录请使用新密码。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "密码修改失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function resetUserPassword(user: ManagedUser) {
+    const confirmed = window.confirm(
+      `确认将 ${user.displayName} 的密码重置为 ${defaultResetPassword}？`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${apiBase}/auth/users/${user.id}/password`, {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({ newPassword: defaultResetPassword })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error ?? "重置密码失败");
+      }
+      setMessage(`已重置 ${user.displayName} 的密码。`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "重置密码失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteUser(user: ManagedUser) {
+    const confirmed = window.confirm(`确认删除学员 ${user.displayName}？该账号将无法登录。`);
+    if (!confirmed) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${apiBase}/auth/users/${user.id}`, {
+        method: "DELETE",
+        headers: headers()
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error ?? "删除学员失败");
+      }
+      setMessage(`已删除学员：${user.displayName}`);
+      await loadUsers();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "删除学员失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   if (!actor) {
     return (
       <main className="login-shell">
@@ -318,9 +551,9 @@ function App() {
             </div>
           </div>
           <h1>登录工作台</h1>
-          <p>默认账号：admin / Admin@123456，student001 / Student@123456。</p>
+          <p>可使用账号、学号/工号或手机号登录。默认账号：admin / Admin@123456。</p>
           <label>
-            账号
+            账号 / 学号 / 手机号
             <input value={username} onChange={(event) => setUsername(event.target.value)} />
           </label>
           <label>
@@ -370,7 +603,7 @@ function App() {
           </a>
           <a href="#members">
             <Users size={18} />
-            成员权限
+            账户管理
           </a>
         </nav>
 
@@ -524,7 +757,7 @@ function App() {
             <span>{canApprove ? pendingApplications.length : visibleApplications.length} 条</span>
           </div>
 
-          <div className="table">
+          <div className={`table list-frame ${showAllApplications ? "expanded" : ""}`}>
             <div className="table-head">
               <span>耗材</span>
               <span>申请人</span>
@@ -532,7 +765,7 @@ function App() {
               <span>状态</span>
               <span>操作</span>
             </div>
-            {visibleApplications.map((application) => (
+            {displayedApplications.map((application) => (
               <div className="table-row" key={application.id}>
                 <span>
                   <strong>{application.materialName}</strong>
@@ -570,6 +803,252 @@ function App() {
               </div>
             ))}
           </div>
+          {hasMoreApplications ? (
+            <button
+              className="ghost more-button"
+              type="button"
+              onClick={() => setShowAllApplications((value) => !value)}
+            >
+              {showAllApplications
+                ? "收起"
+                : `展示更多（还有 ${visibleApplications.length - applicationPreviewLimit} 条）`}
+            </button>
+          ) : null}
+        </section>
+
+        <section className="panel member-panel" id="members">
+          <div className="panel-head">
+            <div>
+              <p className="eyebrow">Members</p>
+              <h2>账户管理</h2>
+            </div>
+            <Users size={20} />
+          </div>
+
+          <div className="subnav">
+            <button
+              type="button"
+              className={accountTab === "profile" ? "selected" : ""}
+              onClick={() => setAccountTab("profile")}
+            >
+              个人资料
+            </button>
+            <button
+              type="button"
+              className={accountTab === "security" ? "selected" : ""}
+              onClick={() => setAccountTab("security")}
+            >
+              修改密码
+            </button>
+            {canManageUsers ? (
+              <>
+                <button
+                  type="button"
+                  className={accountTab === "list" ? "selected" : ""}
+                  onClick={() => setAccountTab("list")}
+                >
+                  账号列表
+                </button>
+                <button
+                  type="button"
+                  className={accountTab === "register" ? "selected" : ""}
+                  onClick={() => setAccountTab("register")}
+                >
+                  注册账号
+                </button>
+              </>
+            ) : null}
+          </div>
+
+          {accountTab === "profile" ? (
+            <div className="profile-grid">
+              <article className="profile-card">
+                <Users size={22} />
+                <span>账号</span>
+                <strong>{profile?.username ?? actor.username}</strong>
+              </article>
+              <article className="profile-card">
+                <ClipboardList size={22} />
+                <span>学号/工号</span>
+                <strong>{profile?.studentId ?? "-"}</strong>
+              </article>
+              <article className="profile-card">
+                <ShieldCheck size={22} />
+                <span>角色</span>
+                <strong>{roleText(profile?.role ?? actor.role)}</strong>
+              </article>
+              <article className="profile-card">
+                <Smartphone size={22} />
+                <span>绑定手机</span>
+                <strong>{profile?.phone ?? "未绑定"}</strong>
+              </article>
+              <form className="contact-form" onSubmit={updateContact}>
+                <label>
+                  修改绑定手机
+                  <input
+                    placeholder="请输入 11 位手机号"
+                    value={contactPhone}
+                    onChange={(event) => setContactPhone(event.target.value)}
+                  />
+                </label>
+                <button className="primary" disabled={loading}>
+                  {loading ? "保存中..." : "保存手机号"}
+                </button>
+              </form>
+            </div>
+          ) : null}
+
+          {accountTab === "security" ? (
+            <form className="security-form" onSubmit={changePassword}>
+              <div className="security-title">
+                <KeyRound size={22} />
+                <div>
+                  <h3>修改登录密码</h3>
+                  <p>本地账号可在此修改密码；统一身份认证账号以后将跳转到学校认证系统处理。</p>
+                </div>
+              </div>
+              <label>
+                当前密码
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                />
+              </label>
+              <label>
+                新密码
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                />
+              </label>
+              <label>
+                确认新密码
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                />
+              </label>
+              <button className="primary" disabled={loading}>
+                {loading ? "修改中..." : "修改密码"}
+              </button>
+            </form>
+          ) : null}
+
+          {accountTab === "list" && canManageUsers ? (
+            <div className="account-list">
+              <label className="search-box">
+                搜索账号
+                <input
+                  placeholder="按账号、姓名、学号/工号搜索"
+                  value={userSearch}
+                  onChange={(event) => setUserSearch(event.target.value)}
+                />
+              </label>
+
+              <div className={`account-table list-frame ${showAllAccounts ? "expanded" : ""}`}>
+                <div className="account-head">
+                  <span>账号</span>
+                  <span>姓名</span>
+                  <span>学号/工号</span>
+                  <span>手机</span>
+                  <span>角色</span>
+                  <span>来源</span>
+                  <span>状态</span>
+                  <span>操作</span>
+                </div>
+                {displayedUsers.map((user) => (
+                  <div className="account-row" key={user.id}>
+                    <span>{user.username}</span>
+                    <span>{user.displayName}</span>
+                    <span>{user.studentId ?? "-"}</span>
+                    <span>{user.phone ?? "-"}</span>
+                    <span>{roleText(user.role)}</span>
+                    <span>{user.identityProvider}</span>
+                    <span>{user.active ? "启用" : "停用"}</span>
+                    <span className="row-actions">
+                      {user.role === "member" && user.active ? (
+                        <>
+                          <button
+                            type="button"
+                            disabled={loading}
+                            onClick={() => resetUserPassword(user)}
+                          >
+                            重置密码
+                          </button>
+                          <button type="button" disabled={loading} onClick={() => deleteUser(user)}>
+                            删除
+                          </button>
+                        </>
+                      ) : (
+                        <small>-</small>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {hasMoreUsers ? (
+                <button
+                  className="ghost more-button"
+                  type="button"
+                  onClick={() => setShowAllAccounts((value) => !value)}
+                >
+                  {showAllAccounts
+                    ? "收起"
+                    : `展示更多（还有 ${users.length - accountPreviewLimit} 个）`}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {accountTab === "register" && canManageUsers ? (
+            <form className="member-form" onSubmit={registerUser}>
+              <label>
+                登录账号
+                <input
+                  value={registerUsername}
+                  onChange={(event) => setRegisterUsername(event.target.value)}
+                />
+              </label>
+              <label>
+                姓名
+                <input
+                  value={registerDisplayName}
+                  onChange={(event) => setRegisterDisplayName(event.target.value)}
+                />
+              </label>
+              <label>
+                学号/工号
+                <input
+                  value={registerStudentId}
+                  onChange={(event) => setRegisterStudentId(event.target.value)}
+                />
+              </label>
+              <label>
+                初始密码
+                <input
+                  type="password"
+                  value={registerPassword}
+                  onChange={(event) => setRegisterPassword(event.target.value)}
+                />
+              </label>
+              <label>
+                角色
+                <select
+                  value={registerRole}
+                  onChange={(event) => setRegisterRole(event.target.value as "admin" | "member")}
+                >
+                  <option value="member">成员</option>
+                  <option value="admin">管理员</option>
+                </select>
+              </label>
+              <button className="primary" disabled={loading}>
+                {loading ? "创建中..." : "创建账号"}
+              </button>
+            </form>
+          ) : null}
         </section>
 
         <section className="module-strip">

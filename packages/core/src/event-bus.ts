@@ -5,6 +5,7 @@ type Handler = (event: DomainEvent<object>) => Promise<void> | void;
 
 export class InMemoryEventBus implements EventBus {
   private readonly handlers = new Map<string, Set<Handler>>();
+  private readonly allHandlers = new Set<Handler>();
 
   constructor(private readonly logger: LoggerPort) {}
 
@@ -16,7 +17,9 @@ export class InMemoryEventBus implements EventBus {
       handlers: handlers.size
     });
 
-    await Promise.all([...handlers].map((handler) => handler(event as DomainEvent<object>)));
+    await Promise.all(
+      [...handlers, ...this.allHandlers].map((handler) => handler(event as DomainEvent<object>))
+    );
   }
 
   subscribe<TPayload extends object>(
@@ -29,6 +32,14 @@ export class InMemoryEventBus implements EventBus {
 
     return () => {
       handlers.delete(handler as Handler);
+    };
+  }
+
+  subscribeAll(handler: (event: DomainEvent<object>) => Promise<void> | void): () => void {
+    this.allHandlers.add(handler);
+
+    return () => {
+      this.allHandlers.delete(handler);
     };
   }
 }

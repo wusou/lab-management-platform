@@ -13,6 +13,39 @@ body {
   margin: 0;
 }
 
+.login-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #eef2ec;
+}
+
+.login-panel {
+  width: min(440px, 100%);
+  display: grid;
+  gap: 16px;
+  padding: 28px;
+  border: 1px solid #d3ddd5;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 24px 60px rgba(43, 65, 54, 0.12);
+}
+
+.login-brand {
+  color: #17211c;
+}
+
+.login-panel h1 {
+  margin: 4px 0 0;
+}
+
+.login-panel p,
+.login-message {
+  color: #64766d;
+  line-height: 1.6;
+}
+
 button,
 input,
 select,
@@ -101,6 +134,20 @@ button {
   font-size: 13px;
 }
 
+.role-card strong,
+.role-card small {
+  display: block;
+}
+
+.role-card strong {
+  margin-top: 8px;
+}
+
+.role-card small {
+  margin-top: 4px;
+  color: #aebbb4;
+}
+
 .role-switch {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -187,6 +234,11 @@ h2 {
 
 .ghost {
   color: #17211c;
+}
+
+.ghost.full {
+  width: 100%;
+  justify-content: center;
 }
 
 .metrics,
@@ -343,6 +395,14 @@ textarea {
 
 .primary:disabled {
   opacity: 0.6;
+}
+
+.stock-in {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #dce5df;
 }
 
 .table {

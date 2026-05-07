@@ -3,6 +3,7 @@ import type {
   ActivatedPlugin,
   AuditPort,
   AuthPort,
+  DomainEvent,
   LoggerPort,
   PluginManifest,
   RegisteredRoute
@@ -50,10 +51,18 @@ export class Kernel {
     return this.options.auth.authenticate(token);
   }
 
+  async login(username: string, password: string): Promise<{ token: string; actor: Actor } | null> {
+    return this.options.auth.login?.(username, password) ?? null;
+  }
+
   assertPermission(actor: Actor, permission: RegisteredRoute["permission"]): void {
     if (permission) {
       this.options.auth.assertPermission(actor, permission);
     }
+  }
+
+  subscribeAllEvents(handler: (event: DomainEvent<object>) => Promise<void> | void): () => void {
+    return this.eventBus.subscribeAll(handler);
   }
 
   async shutdown(): Promise<void> {

@@ -11,6 +11,8 @@ services:
       - .:/workspace
       - /workspace/node_modules
       - /workspace/apps/api/node_modules
+      - /workspace/packages/core/node_modules
+      - /workspace/plugins/inventory/node_modules
     depends_on:
       postgres:
         condition: service_healthy
@@ -27,6 +29,8 @@ services:
       - .:/workspace
       - /workspace/node_modules
       - /workspace/apps/web/node_modules
+      - /workspace/packages/core/node_modules
+      - /workspace/plugins/inventory/node_modules
     depends_on:
       - api
 

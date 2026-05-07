@@ -10,6 +10,10 @@
   },
   "dependencies": {
     "@lab/contracts": "workspace:*",
-    "@lab/core": "workspace:*"
+    "@lab/core": "workspace:*",
+    "pg": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.20.0"
   }
 }

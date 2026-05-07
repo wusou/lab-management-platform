@@ -15,11 +15,14 @@ export type Permission =
 
 export interface Actor {
   id: string;
+  username?: string;
+  displayName?: string;
   role: Role;
   permissions: Permission[];
 }
 
 export interface AuthPort {
+  login?(username: string, password: string): Promise<{ token: string; actor: Actor } | null>;
   authenticate(token: string): Promise<Actor | null>;
   assertPermission(actor: Actor, permission: Permission): void;
 }
@@ -59,6 +62,7 @@ export interface EventBus {
     eventType: string,
     handler: (event: DomainEvent<TPayload>) => Promise<void> | void
   ): () => void;
+  subscribeAll(handler: (event: DomainEvent<object>) => Promise<void> | void): () => void;
 }
 
 export interface PluginContext {

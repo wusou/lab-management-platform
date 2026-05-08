@@ -27,7 +27,7 @@
 首次启动：
 
 ```powershell
-git clone <repository-url>
+git clone https://github.com/wusou/lab-management-platform.git
 cd lab-management-platform
 docker compose up --build -d
 ```

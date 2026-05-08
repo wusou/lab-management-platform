@@ -14,6 +14,7 @@
   "dependencies": {
     "@fastify/cors": "^10.0.2",
     "@lab/core": "workspace:*",
+    "@lab/plugin-collaboration": "workspace:*",
     "@lab/plugin-files": "workspace:*",
     "@lab/plugin-hello-world": "workspace:*",
     "@lab/plugin-inventory": "workspace:*",

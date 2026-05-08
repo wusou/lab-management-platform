@@ -11,7 +11,8 @@
 - 申请审批：成员提交耗材申请，管理员批准/拒绝
 - 实时刷新：通过 SSE 接收申请和审批变化
 - 库存流水：查询入库和审批出库记录
-- 文件资料：登记和查询 Synology Drive 共享链接
+- 文件资料：文件夹、标签、权限、小文件直传、版本记录、Synology Drive 链接兼容
+- 会议通知：会议预约、会议完成标记、站内通知、全局公告
 - 审计日志：关键动作写入 PostgreSQL
 - 生产部署：Nginx、生产 Compose、环境变量、数据库迁移脚本
 
@@ -71,7 +72,8 @@ packages/
   contracts/           OpenAPI 和跨模块共享契约
 plugins/
   inventory/           耗材库存、申请审批、库存流水插件
-  files/               文件资料插件，当前登记 Synology Drive 链接
+  files/               文件资料、权限、标签、版本与 NAS 链接兼容插件
+  collaboration/       会议、公告、站内通知插件
   hello-world/         示例插件
 infra/
   postgres/            数据库初始化和迁移 SQL

@@ -1,23 +1,28 @@
 import {
   Bell,
   Boxes,
+  CalendarClock,
   CheckCircle2,
   ClipboardList,
   Database,
+  Download,
   FileText,
   FlaskConical,
+  Folder,
   KeyRound,
   LayoutDashboard,
   Link as LinkIcon,
   LogOut,
+  Megaphone,
   PackageCheck,
   Send,
   ShieldCheck,
   Smartphone,
+  Upload,
   Users,
   XCircle
 } from "lucide-react";
-import type { FormEvent, ReactNode } from "react";
+import type { ReactNode, SyntheticEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
@@ -100,15 +105,78 @@ interface ManagedUser {
   createdAt: string;
 }
 
-type FileCategory = "sop" | "template" | "record" | "other";
+type FileCategory = "sop" | "template" | "record" | "dataset" | "meeting" | "other";
+type FileNodeType = "folder" | "file";
+type FileVisibility = "public" | "group" | "private";
+type StorageProvider = "database" | "synology" | "external_link";
+type MeetingStatus = "scheduled" | "completed" | "cancelled";
+type NotificationType = "announcement" | "meeting" | "approval" | "task" | "system";
 
 interface LabFile {
   id: string;
+  nodeType: FileNodeType;
   title: string;
   category: FileCategory;
-  driveUrl: string;
+  parentId?: string;
+  tags: string[];
+  visibility: FileVisibility;
+  storageProvider: StorageProvider;
+  driveUrl?: string;
   description: string;
   ownerId: string;
+  ownerName: string;
+  currentVersion: number;
+  latestVersionId?: string;
+  originalName?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface FileVersion {
+  id: string;
+  fileId: string;
+  version: number;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  contentBase64?: string;
+  driveUrl?: string;
+  changeNote: string;
+  uploaderId: string;
+  uploaderName: string;
+  createdAt: string;
+}
+
+interface Meeting {
+  id: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  location: string;
+  onlineUrl?: string;
+  participantIds: string[];
+  agendaFileId?: string;
+  minutesFileId?: string;
+  summary: string;
+  status: MeetingStatus;
+  createdBy: string;
+  createdByName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface NotificationItem {
+  id: string;
+  recipientId?: string;
+  title: string;
+  content: string;
+  type: NotificationType;
+  relatedType?: string;
+  relatedId?: string;
+  readAt?: string;
+  createdBy: string;
   createdAt: string;
 }
 
@@ -116,6 +184,12 @@ const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000";
 const applicationPreviewLimit = 8;
 const accountPreviewLimit = 10;
 const defaultResetPassword = "Student@123456";
+
+function toDatetimeLocal(date: Date) {
+  const offset = date.getTimezoneOffset();
+  const local = new Date(date.getTime() - offset * 60 * 1000);
+  return local.toISOString().slice(0, 16);
+}
 
 function statusText(status: ApplicationStatus) {
   return {
@@ -138,8 +212,46 @@ function fileCategoryText(category: FileCategory) {
     sop: "SOP",
     template: "模板",
     record: "记录",
+    dataset: "数据集",
+    meeting: "会议",
     other: "其他"
   }[category];
+}
+
+function visibilityText(visibility: FileVisibility) {
+  return {
+    public: "公开",
+    group: "课题组可见",
+    private: "仅自己可见"
+  }[visibility];
+}
+
+function meetingStatusText(status: MeetingStatus) {
+  return {
+    scheduled: "已预约",
+    completed: "已完成",
+    cancelled: "已取消"
+  }[status];
+}
+
+function notificationTypeText(type: NotificationType) {
+  return {
+    announcement: "公告",
+    meeting: "会议",
+    approval: "审批",
+    task: "任务",
+    system: "系统"
+  }[type];
+}
+
+function formatFileSize(sizeBytes?: number) {
+  if (!sizeBytes) {
+    return "-";
+  }
+  if (sizeBytes < 1024 * 1024) {
+    return `${Math.ceil(sizeBytes / 1024)} KB`;
+  }
+  return `${(sizeBytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 const permissionLabels: Record<Permission, string> = {
@@ -198,6 +310,9 @@ function App() {
   const [applications, setApplications] = useState<InventoryApplication[]>([]);
   const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
   const [files, setFiles] = useState<LabFile[]>([]);
+  const [fileVersions, setFileVersions] = useState<FileVersion[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [profile, setProfile] = useState<ManagedUser | null>(null);
   const [summary, setSummary] = useState<Summary>({
@@ -231,14 +346,38 @@ function App() {
   const [movementMaterialFilter, setMovementMaterialFilter] = useState("all");
   const [movementTypeFilter, setMovementTypeFilter] = useState("all");
   const [fileSearch, setFileSearch] = useState("");
+  const [fileParentId, setFileParentId] = useState("");
+  const [selectedFileId, setSelectedFileId] = useState("");
   const [fileTitle, setFileTitle] = useState("实验记录模板");
   const [fileCategory, setFileCategory] = useState<FileCategory>("template");
+  const [fileNodeType, setFileNodeType] = useState<FileNodeType>("file");
+  const [fileVisibility, setFileVisibility] = useState<FileVisibility>("public");
+  const [fileTags, setFileTags] = useState("模板,实验记录");
   const [fileDriveUrl, setFileDriveUrl] = useState("https://drive.example.local/shared/template");
   const [fileDescription, setFileDescription] = useState("Synology Drive 共享链接");
+  const [fileUploadName, setFileUploadName] = useState("");
+  const [fileUploadMimeType, setFileUploadMimeType] = useState("");
+  const [fileUploadSize, setFileUploadSize] = useState(0);
+  const [fileUploadBase64, setFileUploadBase64] = useState("");
+  const [versionNote, setVersionNote] = useState("更新资料版本");
+  const [meetingTitle, setMeetingTitle] = useState("课题组周会");
+  const [meetingStartsAt, setMeetingStartsAt] = useState(() =>
+    toDatetimeLocal(new Date(Date.now() + 1000 * 60 * 60 * 24))
+  );
+  const [meetingEndsAt, setMeetingEndsAt] = useState(() =>
+    toDatetimeLocal(new Date(Date.now() + 1000 * 60 * 60 * 25))
+  );
+  const [meetingLocation, setMeetingLocation] = useState("实验室会议室");
+  const [meetingOnlineUrl, setMeetingOnlineUrl] = useState("");
+  const [meetingParticipants, setMeetingParticipants] = useState("");
+  const [meetingSummary, setMeetingSummary] = useState("同步本周实验进展与耗材申请。");
+  const [announcementTitle, setAnnouncementTitle] = useState("实验室通知");
+  const [announcementContent, setAnnouncementContent] = useState("请及时查看本周会议安排。");
 
   const canApprove = actor?.permissions.includes("inventory:write") ?? false;
   const canManageUsers = actor?.permissions.includes("user:write") ?? false;
   const canManageFiles = actor?.permissions.includes("file:write") ?? false;
+  const canManageMeetings = actor?.permissions.includes("meeting:write") ?? false;
 
   function headers(activeToken = token) {
     return {
@@ -247,7 +386,7 @@ function App() {
     };
   }
 
-  async function login(event: FormEvent) {
+  async function login(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     try {
@@ -354,7 +493,11 @@ function App() {
       return;
     }
 
-    const response = await fetch(`${apiBase}/files?search=${encodeURIComponent(search)}`, {
+    const params = new URLSearchParams();
+    if (search) {
+      params.set("search", search);
+    }
+    const response = await fetch(`${apiBase}/files?${params.toString()}`, {
       headers: headers(activeToken)
     });
     const payload = await response.json();
@@ -362,6 +505,52 @@ function App() {
       throw new Error(payload.error ?? "文件资料加载失败");
     }
     setFiles(payload);
+  }
+
+  async function loadFileVersions(fileId = selectedFileId, activeToken = token) {
+    if (!activeToken || !fileId) {
+      setFileVersions([]);
+      return;
+    }
+
+    const response = await fetch(`${apiBase}/files/${fileId}/versions`, {
+      headers: headers(activeToken)
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error ?? "文件版本加载失败");
+    }
+    setFileVersions(payload);
+  }
+
+  async function loadMeetings(activeToken = token) {
+    if (!activeToken) {
+      return;
+    }
+
+    const response = await fetch(`${apiBase}/meetings`, {
+      headers: headers(activeToken)
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error ?? "会议列表加载失败");
+    }
+    setMeetings(payload);
+  }
+
+  async function loadNotifications(activeToken = token) {
+    if (!activeToken) {
+      return;
+    }
+
+    const response = await fetch(`${apiBase}/notifications`, {
+      headers: headers(activeToken)
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error ?? "通知加载失败");
+    }
+    setNotifications(payload);
   }
 
   useEffect(() => {
@@ -385,6 +574,12 @@ function App() {
       loadFiles(fileSearch, token).catch(() => {
         // File refresh is best-effort for background updates.
       });
+      loadMeetings(token).catch(() => {
+        // Meeting refresh is best-effort for background updates.
+      });
+      loadNotifications(token).catch(() => {
+        // Notification refresh is best-effort for background updates.
+      });
     };
     refresh();
     const eventSource = new EventSource(`${apiBase}/events?token=${encodeURIComponent(token)}`);
@@ -399,7 +594,7 @@ function App() {
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [token, fileSearch]);
+  }, [token, fileSearch, fileParentId]);
 
   useEffect(() => {
     if (!token) {
@@ -413,7 +608,18 @@ function App() {
     }, 250);
 
     return () => window.clearTimeout(timeoutId);
-  }, [fileSearch, token]);
+  }, [fileSearch, fileParentId, token]);
+
+  useEffect(() => {
+    if (!selectedFileId || !token) {
+      setFileVersions([]);
+      return;
+    }
+
+    loadFileVersions().catch((error: unknown) => {
+      setMessage(error instanceof Error ? error.message : "文件版本加载失败");
+    });
+  }, [selectedFileId, token]);
 
   useEffect(() => {
     if (!canManageUsers) {
@@ -453,8 +659,16 @@ function App() {
     const matchesType = movementTypeFilter === "all" || movement.type === movementTypeFilter;
     return matchesMaterial && matchesType;
   });
+  const currentFolders = files.filter(
+    (file) => file.nodeType === "folder" && (file.parentId ?? "") === fileParentId
+  );
+  const currentFileItems = files.filter(
+    (file) => file.nodeType === "file" && (file.parentId ?? "") === fileParentId
+  );
+  const selectedFile = files.find((file) => file.id === selectedFileId);
+  const unreadNotifications = notifications.filter((notification) => !notification.readAt);
 
-  async function submitApplication(event: FormEvent) {
+  async function submitApplication(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     try {
@@ -550,7 +764,7 @@ function App() {
     }
   }
 
-  async function registerUser(event: FormEvent) {
+  async function registerUser(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     try {
@@ -585,7 +799,7 @@ function App() {
     }
   }
 
-  async function updateContact(event: FormEvent) {
+  async function updateContact(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     try {
@@ -611,7 +825,7 @@ function App() {
     }
   }
 
-  async function changePassword(event: FormEvent) {
+  async function changePassword(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (newPassword !== confirmPassword) {
       setMessage("两次输入的新密码不一致。");
@@ -688,7 +902,7 @@ function App() {
     }
   }
 
-  async function registerFile(event: FormEvent) {
+  async function registerFile(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     try {
@@ -696,27 +910,148 @@ function App() {
         method: "POST",
         headers: headers(),
         body: JSON.stringify({
+          nodeType: fileNodeType,
           title: fileTitle,
           category: fileCategory,
-          driveUrl: fileDriveUrl,
-          description: fileDescription
+          parentId: fileParentId || undefined,
+          tags: fileTags
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter(Boolean),
+          visibility: fileVisibility,
+          driveUrl: fileDriveUrl || undefined,
+          description: fileDescription,
+          originalName: fileUploadName || undefined,
+          mimeType: fileUploadMimeType || undefined,
+          sizeBytes: fileUploadSize || undefined,
+          contentBase64: fileUploadBase64 || undefined
         })
       });
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(payload.error ?? "文件登记失败");
       }
-      setMessage(`已登记文件资料：${payload.title}`);
+      setMessage(
+        `${fileNodeType === "folder" ? "已创建文件夹" : "已登记文件资料"}：${payload.title}`
+      );
       setFileTitle("");
       setFileDriveUrl("");
       setFileDescription("");
+      setFileTags("");
+      setFileUploadName("");
+      setFileUploadMimeType("");
+      setFileUploadSize(0);
+      setFileUploadBase64("");
       setFileCategory("template");
+      setFileNodeType("file");
+      setSelectedFileId(payload.id);
       await loadFiles("");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "文件登记失败");
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleFileContentChange(file: File | null) {
+    if (!file) {
+      setFileUploadName("");
+      setFileUploadMimeType("");
+      setFileUploadSize(0);
+      setFileUploadBase64("");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setMessage("当前 MVP 支持 5MB 以内小文件直传；大文件请先使用 NAS 链接登记。");
+      return;
+    }
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error("文件读取失败"));
+      reader.readAsDataURL(file);
+    });
+    setFileUploadName(file.name);
+    setFileUploadMimeType(file.type || "application/octet-stream");
+    setFileUploadSize(file.size);
+    setFileUploadBase64(dataUrl.split(",")[1] ?? "");
+    if (!fileTitle.trim()) {
+      setFileTitle(file.name);
+    }
+  }
+
+  async function addFileVersion(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedFileId) {
+      setMessage("请先选择一个文件。");
+      return;
+    }
+    if (!fileUploadBase64 && !fileDriveUrl) {
+      setMessage("请上传小文件或填写 NAS 链接。");
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await fetch(`${apiBase}/files/${selectedFileId}/versions`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({
+          originalName: fileUploadName || selectedFile?.originalName || "file.link",
+          mimeType: fileUploadMimeType || selectedFile?.mimeType || "text/uri-list",
+          sizeBytes: fileUploadSize || 0,
+          contentBase64: fileUploadBase64 || undefined,
+          driveUrl: fileDriveUrl || undefined,
+          changeNote: versionNote
+        })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error ?? "版本更新失败");
+      }
+      setMessage(`已新增版本：v${payload.version}`);
+      setFileUploadName("");
+      setFileUploadMimeType("");
+      setFileUploadSize(0);
+      setFileUploadBase64("");
+      setFileDriveUrl("");
+      await loadFiles();
+      await loadFileVersions(selectedFileId);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "版本更新失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function downloadFileVersion(version: FileVersion) {
+    const response = await fetch(
+      `${apiBase}/files/${version.fileId}/versions/${version.id}/download`,
+      { headers: headers() }
+    );
+    const payload = (await response.json()) as FileVersion & { error?: string };
+    if (!response.ok) {
+      setMessage(payload.error ?? "下载失败");
+      return;
+    }
+    if (payload.driveUrl && !payload.contentBase64) {
+      window.open(payload.driveUrl, "_blank", "noreferrer");
+      return;
+    }
+    if (!payload.contentBase64) {
+      setMessage("该版本没有可下载内容。");
+      return;
+    }
+    const byteCharacters = atob(payload.contentBase64);
+    const byteNumbers = Array.from(byteCharacters, (character) => character.charCodeAt(0));
+    const blob = new Blob([new Uint8Array(byteNumbers)], {
+      type: payload.mimeType || "application/octet-stream"
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = payload.originalName;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   async function deleteUser(user: ManagedUser) {
@@ -742,6 +1077,104 @@ function App() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function createMeeting(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoading(true);
+    try {
+      const response = await fetch(`${apiBase}/meetings`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({
+          title: meetingTitle,
+          startsAt: new Date(meetingStartsAt).toISOString(),
+          endsAt: new Date(meetingEndsAt).toISOString(),
+          location: meetingLocation,
+          onlineUrl: meetingOnlineUrl || undefined,
+          participantIds: meetingParticipants
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean),
+          summary: meetingSummary
+        })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error ?? "会议创建失败");
+      }
+      setMessage(`已创建会议：${payload.title}`);
+      await loadMeetings();
+      await loadNotifications();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "会议创建失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function completeMeeting(meeting: Meeting) {
+    setLoading(true);
+    try {
+      const response = await fetch(`${apiBase}/meetings/${meeting.id}/minutes`, {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({
+          summary: `${meeting.summary}\n纪要：会议已完成，纪要文件可在文件资料模块登记后关联。`,
+          status: "completed"
+        })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error ?? "会议更新失败");
+      }
+      setMeetings((current) => current.map((item) => (item.id === meeting.id ? payload : item)));
+      setMessage("会议已标记完成。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "会议更新失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function publishAnnouncement(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoading(true);
+    try {
+      const response = await fetch(`${apiBase}/announcements`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({
+          title: announcementTitle,
+          content: announcementContent
+        })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error ?? "公告发布失败");
+      }
+      setMessage("公告已发布。");
+      await loadNotifications();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "公告发布失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function markNotificationRead(notification: NotificationItem) {
+    const response = await fetch(`${apiBase}/notifications/${notification.id}/read`, {
+      method: "PATCH",
+      headers: headers()
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      setMessage(payload.error ?? "通知更新失败");
+      return;
+    }
+    setNotifications((current) =>
+      current.map((item) => (item.id === notification.id ? payload : item))
+    );
   }
 
   if (!actor) {
@@ -810,6 +1243,10 @@ function App() {
             <FileText size={18} />
             文件资料
           </a>
+          <a href="#meetings">
+            <CalendarClock size={18} />
+            会议通知
+          </a>
           <a href="#members">
             <Users size={18} />
             账户管理
@@ -834,6 +1271,7 @@ function App() {
           <div className="top-actions">
             <span className="notice">
               <Bell size={17} />
+              {unreadNotifications.length > 0 ? `${unreadNotifications.length} 条未读 · ` : ""}
               {message}
             </span>
             <button className="ghost" onClick={logout}>
@@ -1091,78 +1529,394 @@ function App() {
           <div className="panel-head">
             <div>
               <p className="eyebrow">Files</p>
-              <h2>文件资料</h2>
+              <h2>文件资料与版本</h2>
             </div>
             <FileText size={20} />
           </div>
 
           <div className="file-layout">
             <div className="file-list">
-              <label className="search-box">
-                搜索资料
-                <input
-                  placeholder="按标题、类型、说明搜索"
-                  value={fileSearch}
-                  onChange={(event) => setFileSearch(event.target.value)}
-                />
-              </label>
+              <div className="file-toolbar">
+                <label className="search-box">
+                  搜索资料
+                  <input
+                    placeholder="按标题、标签、上传者搜索"
+                    value={fileSearch}
+                    onChange={(event) => setFileSearch(event.target.value)}
+                  />
+                </label>
+                <label>
+                  当前文件夹
+                  <select
+                    value={fileParentId}
+                    onChange={(event) => {
+                      setFileParentId(event.target.value);
+                      setSelectedFileId("");
+                    }}
+                  >
+                    <option value="">全部 / 根目录</option>
+                    {files
+                      .filter((file) => file.nodeType === "folder")
+                      .map((folder) => (
+                        <option key={folder.id} value={folder.id}>
+                          {folder.title}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              </div>
 
               <div className="file-grid list-frame">
-                {files.map((file) => (
-                  <article className="file-card" key={file.id}>
+                {currentFolders.map((folder) => (
+                  <article
+                    className="file-card folder-card"
+                    key={folder.id}
+                    onClick={() => {
+                      setFileParentId(folder.id);
+                      setSelectedFileId("");
+                    }}
+                  >
+                    <div>
+                      <b>
+                        <Folder size={15} />
+                        文件夹
+                      </b>
+                      <span>{visibilityText(folder.visibility)}</span>
+                    </div>
+                    <h3>{folder.title}</h3>
+                    <p>{folder.description}</p>
+                    <small>{folder.tags.join(" / ") || "未设置标签"}</small>
+                  </article>
+                ))}
+                {currentFileItems.map((file) => (
+                  <article
+                    className={`file-card ${selectedFileId === file.id ? "selected" : ""}`}
+                    key={file.id}
+                    onClick={() => setSelectedFileId(file.id)}
+                  >
                     <div>
                       <b>{fileCategoryText(file.category)}</b>
-                      <span>{new Date(file.createdAt).toLocaleDateString()}</span>
+                      <span>v{file.currentVersion}</span>
                     </div>
                     <h3>{file.title}</h3>
                     <p>{file.description}</p>
-                    <a href={file.driveUrl} target="_blank" rel="noreferrer">
-                      <LinkIcon size={16} />
-                      打开 Synology Drive 链接
-                    </a>
+                    <small>
+                      {visibilityText(file.visibility)} · {formatFileSize(file.sizeBytes)} ·{" "}
+                      {file.ownerName}
+                    </small>
+                    {file.driveUrl ? (
+                      <a href={file.driveUrl} target="_blank" rel="noreferrer">
+                        <LinkIcon size={16} />
+                        打开 NAS/外部链接
+                      </a>
+                    ) : null}
                   </article>
                 ))}
                 {files.length === 0 ? <div className="empty-row">暂无文件资料。</div> : null}
               </div>
+
+              {selectedFile ? (
+                <div className="version-panel">
+                  <div className="panel-head compact">
+                    <div>
+                      <p className="eyebrow">Versions</p>
+                      <h3>{selectedFile.title}</h3>
+                    </div>
+                    <span>{fileVersions.length} 个版本</span>
+                  </div>
+                  {fileVersions.map((version) => (
+                    <div className="version-row" key={version.id}>
+                      <span>
+                        <strong>v{version.version}</strong>
+                        <small>
+                          {version.originalName} · {formatFileSize(version.sizeBytes)} ·{" "}
+                          {version.uploaderName}
+                        </small>
+                      </span>
+                      <button type="button" onClick={() => downloadFileVersion(version)}>
+                        <Download size={15} />
+                        下载/打开
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
 
             {canManageFiles ? (
-              <form className="file-form" onSubmit={registerFile}>
-                <h3>登记资料链接</h3>
-                <label>
-                  标题
-                  <input value={fileTitle} onChange={(event) => setFileTitle(event.target.value)} />
-                </label>
-                <label>
-                  分类
-                  <select
-                    value={fileCategory}
-                    onChange={(event) => setFileCategory(event.target.value as FileCategory)}
-                  >
-                    <option value="sop">SOP</option>
-                    <option value="template">模板</option>
-                    <option value="record">记录</option>
-                    <option value="other">其他</option>
-                  </select>
-                </label>
-                <label>
-                  Synology Drive 链接
-                  <input
-                    value={fileDriveUrl}
-                    onChange={(event) => setFileDriveUrl(event.target.value)}
-                  />
-                </label>
-                <label>
-                  说明
-                  <textarea
-                    value={fileDescription}
-                    onChange={(event) => setFileDescription(event.target.value)}
-                  />
-                </label>
-                <button className="primary" disabled={loading}>
-                  {loading ? "登记中..." : "登记资料"}
-                </button>
-              </form>
+              <div className="file-form-stack">
+                <form className="file-form" onSubmit={registerFile}>
+                  <h3>创建文件/文件夹</h3>
+                  <label>
+                    类型
+                    <select
+                      value={fileNodeType}
+                      onChange={(event) => setFileNodeType(event.target.value as FileNodeType)}
+                    >
+                      <option value="file">文件</option>
+                      <option value="folder">文件夹</option>
+                    </select>
+                  </label>
+                  <label>
+                    标题
+                    <input
+                      value={fileTitle}
+                      onChange={(event) => setFileTitle(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    分类
+                    <select
+                      value={fileCategory}
+                      onChange={(event) => setFileCategory(event.target.value as FileCategory)}
+                    >
+                      <option value="sop">SOP</option>
+                      <option value="template">模板</option>
+                      <option value="record">记录</option>
+                      <option value="dataset">数据集</option>
+                      <option value="meeting">会议资料</option>
+                      <option value="other">其他</option>
+                    </select>
+                  </label>
+                  <label>
+                    权限
+                    <select
+                      value={fileVisibility}
+                      onChange={(event) => setFileVisibility(event.target.value as FileVisibility)}
+                    >
+                      <option value="public">公开</option>
+                      <option value="group">课题组可见</option>
+                      <option value="private">仅自己可见</option>
+                    </select>
+                  </label>
+                  <label>
+                    标签
+                    <input value={fileTags} onChange={(event) => setFileTags(event.target.value)} />
+                  </label>
+                  {fileNodeType === "file" ? (
+                    <>
+                      <label>
+                        小文件上传
+                        <input
+                          type="file"
+                          onChange={(event) =>
+                            handleFileContentChange(event.currentTarget.files?.[0] ?? null)
+                          }
+                        />
+                      </label>
+                      <label>
+                        NAS / 外部链接
+                        <input
+                          value={fileDriveUrl}
+                          onChange={(event) => setFileDriveUrl(event.target.value)}
+                        />
+                      </label>
+                    </>
+                  ) : null}
+                  <label>
+                    说明
+                    <textarea
+                      value={fileDescription}
+                      onChange={(event) => setFileDescription(event.target.value)}
+                    />
+                  </label>
+                  <button className="primary" disabled={loading}>
+                    {loading ? "保存中..." : fileNodeType === "folder" ? "创建文件夹" : "保存资料"}
+                  </button>
+                </form>
+
+                {selectedFile ? (
+                  <form className="file-form" onSubmit={addFileVersion}>
+                    <h3>新增文件版本</h3>
+                    <label>
+                      版本文件
+                      <input
+                        type="file"
+                        onChange={(event) =>
+                          handleFileContentChange(event.currentTarget.files?.[0] ?? null)
+                        }
+                      />
+                    </label>
+                    <label>
+                      或填写 NAS 链接
+                      <input
+                        value={fileDriveUrl}
+                        onChange={(event) => setFileDriveUrl(event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      更新说明
+                      <textarea
+                        value={versionNote}
+                        onChange={(event) => setVersionNote(event.target.value)}
+                      />
+                    </label>
+                    <button className="primary" disabled={loading}>
+                      <Upload size={16} />
+                      {loading ? "更新中..." : "新增版本"}
+                    </button>
+                  </form>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="panel" id="meetings">
+          <div className="panel-head">
+            <div>
+              <p className="eyebrow">Meetings & Notices</p>
+              <h2>会议与通知管理</h2>
+            </div>
+            <CalendarClock size={20} />
+          </div>
+
+          <div className="meeting-layout">
+            <div className="meeting-list list-frame">
+              {meetings.map((meeting) => (
+                <article className="meeting-card" key={meeting.id}>
+                  <div>
+                    <b className={`pill ${meeting.status}`}>{meetingStatusText(meeting.status)}</b>
+                    <span>{new Date(meeting.startsAt).toLocaleString()}</span>
+                  </div>
+                  <h3>{meeting.title}</h3>
+                  <p>{meeting.summary}</p>
+                  <small>
+                    {meeting.location} · 参会 {meeting.participantIds.length} 人 · 创建人{" "}
+                    {meeting.createdByName}
+                  </small>
+                  <div className="row-actions">
+                    {meeting.onlineUrl ? (
+                      <a href={meeting.onlineUrl} target="_blank" rel="noreferrer">
+                        <LinkIcon size={15} />
+                        打开会议链接
+                      </a>
+                    ) : null}
+                    {canManageMeetings && meeting.status === "scheduled" ? (
+                      <button type="button" onClick={() => completeMeeting(meeting)}>
+                        <CheckCircle2 size={15} />
+                        标记完成
+                      </button>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+              {meetings.length === 0 ? <div className="empty-row">暂无会议。</div> : null}
+            </div>
+
+            <div className="notice-list list-frame">
+              <div className="panel-head compact">
+                <div>
+                  <p className="eyebrow">Inbox</p>
+                  <h3>站内通知</h3>
+                </div>
+                <span>{unreadNotifications.length} 未读</span>
+              </div>
+              {notifications.map((notification) => (
+                <article
+                  className={`notice-card ${notification.readAt ? "" : "unread"}`}
+                  key={notification.id}
+                >
+                  <div>
+                    <b>{notificationTypeText(notification.type)}</b>
+                    <span>{new Date(notification.createdAt).toLocaleString()}</span>
+                  </div>
+                  <h3>{notification.title}</h3>
+                  <p>{notification.content}</p>
+                  {!notification.readAt ? (
+                    <button type="button" onClick={() => markNotificationRead(notification)}>
+                      标记已读
+                    </button>
+                  ) : null}
+                </article>
+              ))}
+              {notifications.length === 0 ? <div className="empty-row">暂无通知。</div> : null}
+            </div>
+
+            {canManageMeetings ? (
+              <div className="meeting-actions">
+                <form className="meeting-form" onSubmit={createMeeting}>
+                  <h3>创建会议</h3>
+                  <label>
+                    主题
+                    <input
+                      value={meetingTitle}
+                      onChange={(event) => setMeetingTitle(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    开始时间
+                    <input
+                      type="datetime-local"
+                      value={meetingStartsAt}
+                      onChange={(event) => setMeetingStartsAt(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    结束时间
+                    <input
+                      type="datetime-local"
+                      value={meetingEndsAt}
+                      onChange={(event) => setMeetingEndsAt(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    地点
+                    <input
+                      value={meetingLocation}
+                      onChange={(event) => setMeetingLocation(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    腾讯会议/线上链接
+                    <input
+                      value={meetingOnlineUrl}
+                      onChange={(event) => setMeetingOnlineUrl(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    参会人 ID
+                    <input
+                      placeholder="多个用户 ID 用英文逗号分隔"
+                      value={meetingParticipants}
+                      onChange={(event) => setMeetingParticipants(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    议程说明
+                    <textarea
+                      value={meetingSummary}
+                      onChange={(event) => setMeetingSummary(event.target.value)}
+                    />
+                  </label>
+                  <button className="primary" disabled={loading}>
+                    <CalendarClock size={16} />
+                    {loading ? "创建中..." : "创建会议"}
+                  </button>
+                </form>
+
+                <form className="meeting-form" onSubmit={publishAnnouncement}>
+                  <h3>发布公告</h3>
+                  <label>
+                    标题
+                    <input
+                      value={announcementTitle}
+                      onChange={(event) => setAnnouncementTitle(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    内容
+                    <textarea
+                      value={announcementContent}
+                      onChange={(event) => setAnnouncementContent(event.target.value)}
+                    />
+                  </label>
+                  <button className="primary" disabled={loading}>
+                    <Megaphone size={16} />
+                    {loading ? "发布中..." : "发布公告"}
+                  </button>
+                </form>
+              </div>
             ) : null}
           </div>
         </section>
@@ -1460,7 +2214,8 @@ function App() {
 
         <section className="module-strip">
           <ModuleCard title="项目任务" text="项目、任务、看板入口已预留。" />
-          <ModuleCard title="文件资料" text="当前支持 Synology Drive 共享链接登记。" />
+          <ModuleCard title="文件资料" text="支持文件夹、权限、标签、小文件直传和版本记录。" />
+          <ModuleCard title="会议通知" text="支持会议预约、站内通知和全局公告。" />
           <ModuleCard title="统一认证" text="ids.xmu.edu.cn 适配器后续接入。" />
         </section>
       </section>

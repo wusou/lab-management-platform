@@ -55,11 +55,12 @@
 
 ## plugins
 
-| 路径                  | 作用                              |
-| --------------------- | --------------------------------- |
-| `plugins/hello-world` | 示例插件                          |
-| `plugins/inventory`   | 耗材、申请审批、库存流水          |
-| `plugins/files`       | 文件资料、Synology Drive 链接登记 |
+| 路径                    | 作用                                        |
+| ----------------------- | ------------------------------------------- |
+| `plugins/hello-world`   | 示例插件                                    |
+| `plugins/collaboration` | 会议、公告、站内通知插件                    |
+| `plugins/inventory`     | 耗材、申请审批、库存流水                    |
+| `plugins/files`         | 文件资料、文件夹、权限、版本与 NAS 链接兼容 |
 
 每个插件都应该独立维护：
 

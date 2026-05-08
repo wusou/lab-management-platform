@@ -239,11 +239,11 @@ Authorization: Bearer <token>
 查询文件资料：
 
 ```http
-GET /files?search=sop
+GET /files?search=sop&parentId=folder-safety
 Authorization: Bearer <token>
 ```
 
-登记 Synology Drive 链接：
+创建文件夹：
 
 ```http
 POST /files
@@ -251,10 +251,132 @@ Authorization: Bearer <token>
 Content-Type: application/json
 
 {
+  "nodeType": "folder",
+  "title": "安全培训",
+  "category": "sop",
+  "visibility": "public",
+  "tags": ["安全", "培训"],
+  "description": "实验室安全培训资料"
+}
+```
+
+登记文件资料。小文件可以用 `contentBase64` 直传，较大文件建议先放 NAS，再登记 `driveUrl`：
+
+```http
+POST /files
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "nodeType": "file",
   "title": "实验记录模板",
   "category": "template",
+  "parentId": "folder-id",
+  "visibility": "group",
+  "tags": ["模板", "实验记录"],
   "driveUrl": "https://drive.example.local/shared/template",
-  "description": "Synology Drive 共享链接"
+  "description": "Synology Drive 共享链接",
+  "originalName": "template.docx",
+  "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "sizeBytes": 1024
+}
+```
+
+查询文件版本：
+
+```http
+GET /files/{id}/versions
+Authorization: Bearer <token>
+```
+
+新增文件版本：
+
+```http
+POST /files/{id}/versions
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "originalName": "template-v2.docx",
+  "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "sizeBytes": 2048,
+  "driveUrl": "https://drive.example.local/shared/template-v2",
+  "changeNote": "更新实验记录字段"
+}
+```
+
+下载或打开版本：
+
+```http
+GET /files/{id}/versions/{versionId}/download
+Authorization: Bearer <token>
+```
+
+## 7. 会议与通知
+
+查询会议：
+
+```http
+GET /meetings
+Authorization: Bearer <token>
+```
+
+创建会议：
+
+```http
+POST /meetings
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "title": "课题组周会",
+  "startsAt": "2026-05-08T10:00:00.000Z",
+  "endsAt": "2026-05-08T11:00:00.000Z",
+  "location": "实验室会议室",
+  "onlineUrl": "https://meeting.tencent.com/example",
+  "participantIds": ["u-student001"],
+  "summary": "同步本周实验进展"
+}
+```
+
+上传/更新会议纪要引用：
+
+```http
+PATCH /meetings/{id}/minutes
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "minutesFileId": "file-id",
+  "summary": "会议纪要摘要",
+  "status": "completed"
+}
+```
+
+查询站内通知：
+
+```http
+GET /notifications
+Authorization: Bearer <token>
+```
+
+标记通知已读：
+
+```http
+PATCH /notifications/{id}/read
+Authorization: Bearer <token>
+```
+
+发布全局公告：
+
+```http
+POST /announcements
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "title": "实验室通知",
+  "content": "请及时查看本周会议安排。"
 }
 ```
 

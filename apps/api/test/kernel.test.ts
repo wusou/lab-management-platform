@@ -5,8 +5,10 @@ describe("kernel", () => {
   it("loads plugins through manifests", async () => {
     const kernel = await createKernel();
 
-    expect(kernel.plugins).toEqual(["hello-world", "inventory", "files"]);
+    expect(kernel.plugins).toEqual(["hello-world", "inventory", "files", "collaboration"]);
     expect(kernel.routes.map((route) => route.path)).toContain("/plugins/hello-world");
     expect(kernel.routes.map((route) => route.path)).toContain("/files");
+    expect(kernel.routes.map((route) => route.path)).toContain("/meetings");
+    expect(kernel.routes.map((route) => route.path)).toContain("/notifications");
   });
 });

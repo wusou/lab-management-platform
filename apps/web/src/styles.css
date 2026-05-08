@@ -556,6 +556,17 @@ textarea {
   gap: 12px;
 }
 
+.file-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+  gap: 12px;
+  align-items: end;
+}
+
+.file-toolbar label {
+  margin-bottom: 0;
+}
+
 .file-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -570,6 +581,16 @@ textarea {
   border: 1px solid #dce5df;
   border-radius: 8px;
   background: #fbfdf9;
+  cursor: pointer;
+}
+
+.file-card.selected {
+  border-color: #2f6f55;
+  box-shadow: inset 4px 0 0 #2f6f55;
+}
+
+.folder-card {
+  background: #f3f8f4;
 }
 
 .file-card > div {
@@ -581,6 +602,9 @@ textarea {
 }
 
 .file-card b {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
   color: #2f6f55;
 }
 
@@ -616,6 +640,132 @@ textarea {
 .file-form h3,
 .file-form label {
   margin-bottom: 0;
+}
+
+.file-form-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.version-panel {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #dce5df;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.panel-head.compact {
+  margin-bottom: 4px;
+}
+
+.panel-head.compact h3 {
+  margin-bottom: 0;
+}
+
+.version-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #dce5df;
+  border-radius: 8px;
+  background: #fbfdf9;
+}
+
+.version-row span,
+.version-row small {
+  display: block;
+}
+
+.version-row button,
+.meeting-card a,
+.meeting-card button,
+.notice-card button {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  border: 1px solid #cfd9d2;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #1f6f55;
+  background: #ffffff;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.meeting-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  gap: 16px;
+  align-items: start;
+}
+
+.meeting-list,
+.notice-list,
+.meeting-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.meeting-card,
+.notice-card,
+.meeting-form {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #dce5df;
+  border-radius: 8px;
+  background: #fbfdf9;
+}
+
+.meeting-card > div:first-child,
+.notice-card > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: #64766d;
+  font-size: 13px;
+}
+
+.meeting-card h3,
+.meeting-card p,
+.notice-card h3,
+.notice-card p,
+.meeting-form h3 {
+  margin-bottom: 0;
+}
+
+.meeting-card p,
+.notice-card p {
+  color: #64766d;
+  line-height: 1.6;
+}
+
+.notice-card.unread {
+  border-color: #2f6f55;
+  box-shadow: inset 4px 0 0 #2f6f55;
+}
+
+.meeting-form label {
+  margin-bottom: 0;
+}
+
+.pill.scheduled {
+  color: #1f5d45;
+  background: #dff6e8;
+}
+
+.pill.completed {
+  color: #64766d;
+  background: #edf2ee;
+}
+
+.pill.cancelled {
+  color: #8c1d1d;
+  background: #ffe1df;
 }
 
 .subnav {
@@ -851,7 +1001,7 @@ textarea {
 }
 
 .module-strip {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .module-card {
@@ -900,7 +1050,9 @@ textarea {
   }
 
   .file-layout,
-  .file-grid {
+  .file-grid,
+  .file-toolbar,
+  .meeting-layout {
     grid-template-columns: 1fr;
   }
 

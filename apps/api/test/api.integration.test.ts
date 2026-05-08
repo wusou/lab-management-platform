@@ -117,8 +117,9 @@ describe("api integration", () => {
     );
   });
 
-  it("registers and lists Synology Drive file links", async () => {
+  it("registers files with versions and downloads inline content", async () => {
     const suffix = Date.now();
+    const contentBase64 = Buffer.from(`hello-${suffix}`, "utf8").toString("base64");
     const created = await app.inject({
       method: "POST",
       url: "/files",
@@ -126,12 +127,18 @@ describe("api integration", () => {
       payload: {
         title: `文件测试${suffix}`,
         category: "template",
-        driveUrl: `https://drive.example.local/shared/${suffix}`,
-        description: "api integration test"
+        tags: ["api", "version"],
+        visibility: "public",
+        description: "api integration test",
+        originalName: `file-${suffix}.txt`,
+        mimeType: "text/plain",
+        sizeBytes: Buffer.byteLength(`hello-${suffix}`),
+        contentBase64
       }
     });
     expect(created.statusCode).toBe(201);
-    expect(created.json<{ title: string }>().title).toBe(`文件测试${suffix}`);
+    const file = created.json<{ id: string; title: string; currentVersion: number }>();
+    expect(file.title).toBe(`文件测试${suffix}`);
 
     const listed = await app.inject({
       method: "GET",
@@ -139,11 +146,73 @@ describe("api integration", () => {
       headers: { authorization: `Bearer ${token}` }
     });
     expect(listed.statusCode).toBe(200);
-    expect(listed.json<Array<{ title: string; driveUrl: string }>>()).toEqual(
+    expect(listed.json<Array<{ title: string; currentVersion: number }>>()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          driveUrl: `https://drive.example.local/shared/${suffix}`,
+          currentVersion: expect.any(Number),
           title: `文件测试${suffix}`
+        })
+      ])
+    );
+
+    const versions = await app.inject({
+      method: "GET",
+      url: `/files/${file.id}/versions`,
+      headers: { authorization: `Bearer ${token}` }
+    });
+    expect(versions.statusCode).toBe(200);
+    const versionId = versions.json<Array<{ id: string; version: number }>>()[0]?.id;
+    expect(versionId).toBeTruthy();
+
+    const download = await app.inject({
+      method: "GET",
+      url: `/files/${file.id}/versions/${versionId}/download`,
+      headers: { authorization: `Bearer ${token}` }
+    });
+    expect(download.statusCode).toBe(200);
+    expect(download.json<{ contentBase64: string }>().contentBase64).toBe(contentBase64);
+  });
+
+  it("creates meetings and publishes notifications", async () => {
+    const suffix = Date.now();
+    const created = await app.inject({
+      method: "POST",
+      url: "/meetings",
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        title: `接口会议${suffix}`,
+        startsAt: new Date(Date.now() + 60_000).toISOString(),
+        endsAt: new Date(Date.now() + 120_000).toISOString(),
+        location: "测试会议室",
+        onlineUrl: `https://meeting.tencent.com/${suffix}`,
+        participantIds: ["u-admin"],
+        summary: "api integration test"
+      }
+    });
+    expect(created.statusCode).toBe(201);
+    const meeting = created.json<{ id: string; title: string }>();
+    expect(meeting.title).toBe(`接口会议${suffix}`);
+
+    const meetings = await app.inject({
+      method: "GET",
+      url: "/meetings",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    expect(meetings.statusCode).toBe(200);
+    expect(meetings.json<Array<{ title: string }>>()).toEqual(
+      expect.arrayContaining([expect.objectContaining({ title: `接口会议${suffix}` })])
+    );
+
+    const notifications = await app.inject({
+      method: "GET",
+      url: "/notifications",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    expect(notifications.statusCode).toBe(200);
+    expect(notifications.json<Array<{ title: string }>>()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: `会议邀请：接口会议${suffix}`
         })
       ])
     );

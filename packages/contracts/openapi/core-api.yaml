@@ -410,7 +410,13 @@ paths:
           required: false
           schema:
             type: string
-          description: 按标题、分类、说明模糊搜索
+          description: 按标题、分类、标签、说明模糊搜索
+        - name: parentId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 文件夹 ID，省略时查询全部可见文件
       responses:
         "200":
           description: OK
@@ -421,7 +427,7 @@ paths:
                 items:
                   $ref: "#/components/schemas/LabFile"
     post:
-      summary: 登记 Synology Drive 文件资料
+      summary: 创建文件或文件夹
       security:
         - bearerAuth: []
       requestBody:
@@ -430,27 +436,238 @@ paths:
           application/json:
             schema:
               type: object
-              required: [title, category, driveUrl]
+              required: [title, category]
               properties:
+                nodeType:
+                  type: string
+                  enum: [folder, file]
                 title:
                   type: string
                 category:
                   type: string
-                  enum: [sop, template, record, other]
+                  enum: [sop, template, record, dataset, meeting, other]
+                parentId:
+                  type: string
+                tags:
+                  type: array
+                  items:
+                    type: string
+                visibility:
+                  type: string
+                  enum: [public, group, private]
                 driveUrl:
                   type: string
                   format: uri
                 description:
                   type: string
+                originalName:
+                  type: string
+                mimeType:
+                  type: string
+                sizeBytes:
+                  type: integer
+                contentBase64:
+                  type: string
       responses:
         "201":
-          description: 已登记文件资料
+          description: 已创建文件或文件夹
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/LabFile"
         "403":
           description: 无文件管理权限
+  /files/{id}/versions:
+    get:
+      summary: 查询文件版本
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FileVersion"
+    post:
+      summary: 新增文件版本
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileVersionCreateRequest"
+      responses:
+        "201":
+          description: 已新增版本
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileVersion"
+  /files/{id}/versions/{versionId}/download:
+    get:
+      summary: 获取文件版本内容或 NAS 链接
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileVersion"
+  /meetings:
+    get:
+      summary: 查询会议
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Meeting"
+    post:
+      summary: 创建会议
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MeetingCreateRequest"
+      responses:
+        "201":
+          description: 已创建会议
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Meeting"
+  /meetings/{id}/minutes:
+    patch:
+      summary: 更新会议纪要引用
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                minutesFileId:
+                  type: string
+                summary:
+                  type: string
+                status:
+                  type: string
+                  enum: [scheduled, completed, cancelled]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Meeting"
+  /notifications:
+    get:
+      summary: 查询站内通知
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: unreadOnly
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+  /notifications/{id}/read:
+    patch:
+      summary: 标记通知已读
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notification"
+  /announcements:
+    post:
+      summary: 发布公告
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, content]
+              properties:
+                title:
+                  type: string
+                content:
+                  type: string
+                recipientIds:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "201":
+          description: 已发布公告
   /inventory/applications/{id}/approve:
     patch:
       summary: 管理员批准耗材申请
@@ -654,21 +871,233 @@ components:
           format: date-time
     LabFile:
       type: object
-      required: [id, title, category, driveUrl, description, ownerId, createdAt]
+      required:
+        [
+          id,
+          nodeType,
+          title,
+          category,
+          tags,
+          visibility,
+          storageProvider,
+          description,
+          ownerId,
+          ownerName,
+          currentVersion,
+          createdAt,
+          updatedAt
+        ]
       properties:
         id:
           type: string
+        nodeType:
+          type: string
+          enum: [folder, file]
         title:
           type: string
         category:
           type: string
-          enum: [sop, template, record, other]
+          enum: [sop, template, record, dataset, meeting, other]
+        parentId:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        visibility:
+          type: string
+          enum: [public, group, private]
+        storageProvider:
+          type: string
+          enum: [database, synology, external_link]
         driveUrl:
           type: string
           format: uri
         description:
           type: string
         ownerId:
+          type: string
+        ownerName:
+          type: string
+        currentVersion:
+          type: integer
+        latestVersionId:
+          type: string
+        originalName:
+          type: string
+        mimeType:
+          type: string
+        sizeBytes:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    FileVersionCreateRequest:
+      type: object
+      required: [originalName, mimeType, sizeBytes]
+      properties:
+        originalName:
+          type: string
+        mimeType:
+          type: string
+        sizeBytes:
+          type: integer
+        contentBase64:
+          type: string
+        driveUrl:
+          type: string
+          format: uri
+        changeNote:
+          type: string
+    FileVersion:
+      type: object
+      required:
+        [
+          id,
+          fileId,
+          version,
+          originalName,
+          mimeType,
+          sizeBytes,
+          changeNote,
+          uploaderId,
+          uploaderName,
+          createdAt
+        ]
+      properties:
+        id:
+          type: string
+        fileId:
+          type: string
+        version:
+          type: integer
+        originalName:
+          type: string
+        mimeType:
+          type: string
+        sizeBytes:
+          type: integer
+        contentBase64:
+          type: string
+        driveUrl:
+          type: string
+          format: uri
+        changeNote:
+          type: string
+        uploaderId:
+          type: string
+        uploaderName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    MeetingCreateRequest:
+      type: object
+      required: [title, startsAt, endsAt, location]
+      properties:
+        title:
+          type: string
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        location:
+          type: string
+        onlineUrl:
+          type: string
+          format: uri
+        participantIds:
+          type: array
+          items:
+            type: string
+        agendaFileId:
+          type: string
+        summary:
+          type: string
+    Meeting:
+      type: object
+      required:
+        [
+          id,
+          title,
+          startsAt,
+          endsAt,
+          location,
+          participantIds,
+          summary,
+          status,
+          createdBy,
+          createdByName,
+          createdAt,
+          updatedAt
+        ]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        location:
+          type: string
+        onlineUrl:
+          type: string
+          format: uri
+        participantIds:
+          type: array
+          items:
+            type: string
+        agendaFileId:
+          type: string
+        minutesFileId:
+          type: string
+        summary:
+          type: string
+        status:
+          type: string
+          enum: [scheduled, completed, cancelled]
+        createdBy:
+          type: string
+        createdByName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Notification:
+      type: object
+      required: [id, title, content, type, createdBy, createdAt]
+      properties:
+        id:
+          type: string
+        recipientId:
+          type: string
+        title:
+          type: string
+        content:
+          type: string
+        type:
+          type: string
+          enum: [announcement, meeting, approval, task, system]
+        relatedType:
+          type: string
+        relatedId:
+          type: string
+        readAt:
+          type: string
+          format: date-time
+        createdBy:
           type: string
         createdAt:
           type: string

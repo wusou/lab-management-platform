@@ -8,6 +8,7 @@ COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/core/package.json packages/core/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
+COPY plugins/collaboration/package.json plugins/collaboration/package.json
 COPY plugins/files/package.json plugins/files/package.json
 COPY plugins/hello-world/package.json plugins/hello-world/package.json
 COPY plugins/inventory/package.json plugins/inventory/package.json

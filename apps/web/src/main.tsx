@@ -23,7 +23,7 @@ import {
   XCircle
 } from "lucide-react";
 import type { ReactNode, SyntheticEvent } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
@@ -184,6 +184,7 @@ const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000";
 const applicationPreviewLimit = 8;
 const accountPreviewLimit = 10;
 const defaultResetPassword = "Student@123456";
+const phonePattern = /^1[3-9]\d{9}$/;
 
 function toDatetimeLocal(date: Date) {
   const offset = date.getTimezoneOffset();
@@ -304,8 +305,8 @@ function App() {
     const raw = sessionStorage.getItem("lab_actor");
     return raw ? (JSON.parse(raw) as Actor) : null;
   });
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("Admin@123456");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [materials, setMaterials] = useState<Material[]>([]);
   const [applications, setApplications] = useState<InventoryApplication[]>([]);
   const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
@@ -326,11 +327,12 @@ function App() {
   const [stockInQuantity, setStockInQuantity] = useState(5);
   const [reason, setReason] = useState("课题实验耗材申请");
   const [message, setMessage] = useState("请登录后开始使用。");
+  const [showToast, setShowToast] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [registerUsername, setRegisterUsername] = useState("student002");
-  const [registerPassword, setRegisterPassword] = useState("Student@123456");
-  const [registerStudentId, setRegisterStudentId] = useState("S000002");
-  const [registerDisplayName, setRegisterDisplayName] = useState("学生二号");
+  const [registerUsername, setRegisterUsername] = useState("");
+  const [registerPassword, setRegisterPassword] = useState("");
+  const [registerStudentId, setRegisterStudentId] = useState("");
+  const [registerDisplayName, setRegisterDisplayName] = useState("");
   const [registerRole, setRegisterRole] = useState<"admin" | "member">("member");
   const [accountTab, setAccountTab] = useState<
     "profile" | "security" | "list" | "roles" | "register"
@@ -373,6 +375,8 @@ function App() {
   const [meetingSummary, setMeetingSummary] = useState("同步本周实验进展与耗材申请。");
   const [announcementTitle, setAnnouncementTitle] = useState("实验室通知");
   const [announcementContent, setAnnouncementContent] = useState("请及时查看本周会议安排。");
+  const [selectedNotification, setSelectedNotification] = useState<NotificationItem | null>(null);
+  const didMountToast = useRef(false);
 
   const canApprove = actor?.permissions.includes("inventory:write") ?? false;
   const canManageUsers = actor?.permissions.includes("user:write") ?? false;
@@ -384,6 +388,12 @@ function App() {
       Authorization: `Bearer ${activeToken}`,
       "Content-Type": "application/json"
     };
+  }
+
+  function scrollToNotifications() {
+    document
+      .getElementById("notifications")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function login(event: SyntheticEvent<HTMLFormElement>) {
@@ -668,6 +678,21 @@ function App() {
   const selectedFile = files.find((file) => file.id === selectedFileId);
   const unreadNotifications = notifications.filter((notification) => !notification.readAt);
 
+  useEffect(() => {
+    if (!didMountToast.current) {
+      didMountToast.current = true;
+      return;
+    }
+
+    if (!message) {
+      return;
+    }
+
+    setShowToast(true);
+    const timer = window.setTimeout(() => setShowToast(false), 3200);
+    return () => window.clearTimeout(timer);
+  }, [message]);
+
   async function submitApplication(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
@@ -801,6 +826,10 @@ function App() {
 
   async function updateContact(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!phonePattern.test(contactPhone)) {
+      setMessage("手机号格式不正确，请填写 11 位中国大陆手机号，例如 13800000000。");
+      return;
+    }
     setLoading(true);
     try {
       const response = await fetch(`${apiBase}/auth/profile/contact`, {
@@ -827,6 +856,14 @@ function App() {
 
   async function changePassword(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setMessage("请完整填写当前密码、新密码和确认新密码。");
+      return;
+    }
+    if (newPassword.length < 8) {
+      setMessage("新密码至少需要 8 位。");
+      return;
+    }
     if (newPassword !== confirmPassword) {
       setMessage("两次输入的新密码不一致。");
       return;
@@ -1163,24 +1200,29 @@ function App() {
   }
 
   async function markNotificationRead(notification: NotificationItem) {
-    const response = await fetch(`${apiBase}/notifications/${notification.id}/read`, {
-      method: "PATCH",
-      headers: headers()
-    });
-    const payload = await response.json();
-    if (!response.ok) {
-      setMessage(payload.error ?? "通知更新失败");
-      return;
+    try {
+      const response = await fetch(`${apiBase}/notifications/${notification.id}/read`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error ?? "通知更新失败");
+      }
+      setNotifications((current) =>
+        current.map((item) => (item.id === notification.id ? payload : item))
+      );
+      setSelectedNotification((current) => (current?.id === payload.id ? payload : current));
+      setMessage(`已读：${payload.title}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "通知更新失败");
     }
-    setNotifications((current) =>
-      current.map((item) => (item.id === notification.id ? payload : item))
-    );
   }
 
   if (!actor) {
     return (
       <main className="login-shell">
-        <form className="login-panel" onSubmit={login}>
+        <form className="login-panel" onSubmit={login} autoComplete="off">
           <div className="brand login-brand">
             <FlaskConical size={30} />
             <div>
@@ -1189,16 +1231,23 @@ function App() {
             </div>
           </div>
           <h1>登录工作台</h1>
-          <p>可使用账号、学号/工号或手机号登录。默认账号：admin / Admin@123456。</p>
+          <p>可使用账号、学号/工号或手机号登录。</p>
           <label>
             账号 / 学号 / 手机号
-            <input value={username} onChange={(event) => setUsername(event.target.value)} />
+            <input
+              value={username}
+              autoComplete="off"
+              placeholder="请输入账号、学号/工号或手机号"
+              onChange={(event) => setUsername(event.target.value)}
+            />
           </label>
           <label>
             密码
             <input
               type="password"
               value={password}
+              autoComplete="new-password"
+              placeholder="请输入密码"
               onChange={(event) => setPassword(event.target.value)}
             />
           </label>
@@ -1263,17 +1312,23 @@ function App() {
       </aside>
 
       <section className="workspace">
+        {showToast ? (
+          <div className="toast" role="status" aria-live="polite">
+            <Bell size={16} />
+            {message}
+          </div>
+        ) : null}
+
         <header className="topbar">
           <div>
             <p className="eyebrow">今日实验室运营</p>
             <h1>耗材申请与审批工作台</h1>
           </div>
           <div className="top-actions">
-            <span className="notice">
+            <button className="notice notice-button" type="button" onClick={scrollToNotifications}>
               <Bell size={17} />
-              {unreadNotifications.length > 0 ? `${unreadNotifications.length} 条未读 · ` : ""}
-              {message}
-            </span>
+              {unreadNotifications.length} 条未读 · 查看通知
+            </button>
             <button className="ghost" onClick={logout}>
               <LogOut size={17} />
               退出
@@ -1804,7 +1859,7 @@ function App() {
               {meetings.length === 0 ? <div className="empty-row">暂无会议。</div> : null}
             </div>
 
-            <div className="notice-list list-frame">
+            <div className="notice-list list-frame" id="notifications">
               <div className="panel-head compact">
                 <div>
                   <p className="eyebrow">Inbox</p>
@@ -1816,6 +1871,15 @@ function App() {
                 <article
                   className={`notice-card ${notification.readAt ? "" : "unread"}`}
                   key={notification.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedNotification(notification)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedNotification(notification);
+                    }
+                  }}
                 >
                   <div>
                     <b>{notificationTypeText(notification.type)}</b>
@@ -1824,7 +1888,13 @@ function App() {
                   <h3>{notification.title}</h3>
                   <p>{notification.content}</p>
                   {!notification.readAt ? (
-                    <button type="button" onClick={() => markNotificationRead(notification)}>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void markNotificationRead(notification);
+                      }}
+                    >
                       标记已读
                     </button>
                   ) : null}
@@ -2218,6 +2288,50 @@ function App() {
           <ModuleCard title="会议通知" text="支持会议预约、站内通知和全局公告。" />
           <ModuleCard title="统一认证" text="ids.xmu.edu.cn 适配器后续接入。" />
         </section>
+
+        {selectedNotification ? (
+          <div
+            className="modal-backdrop"
+            role="presentation"
+            onClick={() => setSelectedNotification(null)}
+          >
+            <article
+              className="modal-card"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="notification-detail-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="panel-head compact">
+                <div>
+                  <p className="eyebrow">{notificationTypeText(selectedNotification.type)}</p>
+                  <h2 id="notification-detail-title">{selectedNotification.title}</h2>
+                </div>
+                <button
+                  className="icon-button"
+                  type="button"
+                  onClick={() => setSelectedNotification(null)}
+                >
+                  <XCircle size={18} />
+                </button>
+              </div>
+              <p>{selectedNotification.content}</p>
+              <small>{new Date(selectedNotification.createdAt).toLocaleString()}</small>
+              <div className="row-actions">
+                {!selectedNotification.readAt ? (
+                  <button type="button" onClick={() => markNotificationRead(selectedNotification)}>
+                    标记已读
+                  </button>
+                ) : (
+                  <span className="pill approved">已读</span>
+                )}
+                <button type="button" onClick={() => setSelectedNotification(null)}>
+                  关闭
+                </button>
+              </div>
+            </article>
+          </div>
+        ) : null}
       </section>
     </main>
   );

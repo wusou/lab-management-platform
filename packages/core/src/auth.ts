@@ -71,6 +71,10 @@ const demoUsers: DemoUser[] = [
 const studentIdPattern = /^[A-Za-z0-9_-]{4,32}$/;
 const phonePattern = /^1[3-9]\d{9}$/;
 
+function shouldSeedDemoAccounts(): boolean {
+  return process.env.LAB_SEED_DEMO_ACCOUNTS !== "false" && process.env.NODE_ENV !== "production";
+}
+
 function toActor(user: {
   id: string;
   username?: string;
@@ -326,6 +330,10 @@ export class PostgresAuthAdapter implements AuthPort {
         expires_at TIMESTAMPTZ NOT NULL
       );
     `);
+
+    if (!shouldSeedDemoAccounts()) {
+      return;
+    }
 
     for (const user of demoUsers) {
       await this.pool.query(

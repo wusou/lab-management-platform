@@ -18,6 +18,12 @@
 
 ## 快速启动
 
+前置条件：
+
+- 已安装并启动 Docker Desktop。
+- Windows 推荐启用 WSL 2 后端。
+- 本仓库开发环境默认使用 Docker Compose，首次体验不需要单独安装 PostgreSQL。
+
 首次启动：
 
 ```powershell
@@ -26,10 +32,17 @@ cd lab-management-platform
 docker compose up --build -d
 ```
 
-如果刚新增依赖或插件，建议刷新匿名依赖卷：
+如果是已有仓库拉取新代码，或刚新增依赖/插件，建议刷新匿名依赖卷：
 
 ```powershell
+git pull
 docker compose up --build -d -V api web
+```
+
+如果数据库结构有更新，执行一次迁移：
+
+```powershell
+docker compose exec api pnpm --filter @lab/api db:migrate
 ```
 
 访问地址：
@@ -38,12 +51,14 @@ docker compose up --build -d -V api web
 - API：`http://localhost:3000`
 - 健康检查：`http://localhost:3000/health`
 
-默认账号：
+开发环境种子账号：
 
 ```text
 管理员：admin / Admin@123456
 成员：student001 / Student@123456
 ```
+
+这两个账号只在 `NODE_ENV=development` 且 `LAB_SEED_DEMO_ACCOUNTS` 未设置为 `false` 时自动初始化，方便本地演示和测试。登录页不会展示或自动填充默认账号；生产环境应设置 `LAB_SEED_DEMO_ACCOUNTS=false`，并通过初始化管理员、统一认证或管理员后台创建正式账号。
 
 ## 常用命令
 

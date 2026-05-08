@@ -148,6 +148,12 @@ class MemoryCollaborationRepository implements CollaborationRepository {
   async listNotifications(actor: Actor, unreadOnly = false): Promise<Notification[]> {
     return this.notifications
       .filter((notification) => !notification.recipientId || notification.recipientId === actor.id)
+      .filter(
+        (notification) =>
+          notification.type !== "meeting" ||
+          notification.createdBy !== actor.id ||
+          notification.recipientId !== actor.id
+      )
       .filter((notification) => !unreadOnly || !notification.readAt)
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   }
@@ -321,6 +327,7 @@ class PostgresCollaborationRepository implements CollaborationRepository {
       `SELECT *
        FROM collaboration.notification
        WHERE (recipient_id IS NULL OR recipient_id = $1)
+         AND NOT (type = 'meeting' AND created_by = $1 AND recipient_id = $1)
          AND ($2 = false OR read_at IS NULL)
        ORDER BY created_at DESC
        LIMIT 100`,
@@ -536,8 +543,11 @@ export const collaborationPlugin: PluginManifest = {
               createdByName: actor.displayName ?? actor.username ?? actor.id
             });
 
+            const notificationRecipients = participantIds.filter(
+              (participantId) => participantId !== actor.id
+            );
             const notifications = await repository.createNotifications(
-              participantIds.map((recipientId) => ({
+              notificationRecipients.map((recipientId) => ({
                 recipientId,
                 title: `会议邀请：${meeting.title}`,
                 content: `${new Date(meeting.startsAt).toLocaleString()}，${meeting.location}`,
@@ -555,7 +565,11 @@ export const collaborationPlugin: PluginManifest = {
               targetType: "meeting",
               targetId: meeting.id,
               occurredAt: new Date().toISOString(),
-              metadata: { title: meeting.title, participantCount: participantIds.length }
+              metadata: {
+                title: meeting.title,
+                participantCount: participantIds.length,
+                notificationRecipientCount: notificationRecipients.length
+              }
             });
             await context.eventBus.publish({
               id: randomUUID(),

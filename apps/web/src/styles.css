@@ -176,6 +176,30 @@ button {
   gap: 20px;
 }
 
+.toast {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(520px, calc(100vw - 48px));
+  padding: 10px 14px;
+  border: 1px solid #bfd2c7;
+  border-radius: 8px;
+  color: #173626;
+  background: rgba(251, 253, 249, 0.96);
+  box-shadow: 0 12px 30px rgba(20, 35, 27, 0.12);
+  font-weight: 800;
+}
+
+.toast svg {
+  flex: 0 0 auto;
+  color: #2f6f55;
+}
+
 .topbar {
   display: flex;
   justify-content: space-between;
@@ -230,6 +254,17 @@ h2 {
 .notice {
   max-width: 480px;
   color: #365447;
+}
+
+.notice-button {
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+}
+
+.notice-button:hover {
+  border-color: #2f6f55;
+  color: #1f6f55;
 }
 
 .ghost {
@@ -721,6 +756,22 @@ textarea {
   background: #fbfdf9;
 }
 
+.notice-card {
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.notice-card:hover,
+.notice-card:focus-visible {
+  border-color: #2f6f55;
+  box-shadow: 0 8px 20px rgba(20, 35, 27, 0.08);
+  transform: translateY(-1px);
+  outline: none;
+}
+
 .meeting-card > div:first-child,
 .notice-card > div:first-child {
   display: flex;
@@ -747,6 +798,49 @@ textarea {
 .notice-card.unread {
   border-color: #2f6f55;
   box-shadow: inset 4px 0 0 #2f6f55;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(14, 25, 19, 0.32);
+}
+
+.modal-card {
+  display: grid;
+  gap: 14px;
+  width: min(560px, 100%);
+  padding: 20px;
+  border: 1px solid #bfd2c7;
+  border-radius: 8px;
+  background: #fbfdf9;
+  box-shadow: 0 24px 70px rgba(14, 25, 19, 0.24);
+}
+
+.modal-card p {
+  margin-bottom: 0;
+  color: #365447;
+  line-height: 1.8;
+}
+
+.modal-card small {
+  color: #64766d;
+}
+
+.icon-button {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cfd9d2;
+  border-radius: 8px;
+  color: #365447;
+  background: #ffffff;
 }
 
 .meeting-form label {

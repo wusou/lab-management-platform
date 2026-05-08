@@ -209,7 +209,7 @@ describe("api integration", () => {
       headers: { authorization: `Bearer ${token}` }
     });
     expect(notifications.statusCode).toBe(200);
-    expect(notifications.json<Array<{ title: string }>>()).toEqual(
+    expect(notifications.json<Array<{ title: string }>>()).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           title: `会议邀请：接口会议${suffix}`

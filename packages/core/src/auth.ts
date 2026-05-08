@@ -170,8 +170,9 @@ export class DemoAuthAdapter implements AuthPort {
     return toActor(user);
   }
 
-  async listUsers(search = ""): Promise<ManagedUser[]> {
+  async listUsers(search = "", includeInactive = false): Promise<ManagedUser[]> {
     const keyword = search.trim().toLowerCase();
+    void includeInactive;
     return this.users
       .filter((user) =>
         [user.username, user.displayName, user.studentId ?? "", user.phone ?? ""].some((value) =>
@@ -240,6 +241,24 @@ export class DemoAuthAdapter implements AuthPort {
       throw new Error("only member can be deleted here");
     }
     this.users.splice(userIndex, 1);
+  }
+
+  async updateUserRole(
+    targetUserId: string,
+    role: Exclude<Role, "super_admin">
+  ): Promise<ManagedUser> {
+    if (!["admin", "member"].includes(role)) {
+      throw new Error("role must be admin or member");
+    }
+    const user = this.users.find((item) => item.id === targetUserId);
+    if (!user) {
+      throw new Error("user not found");
+    }
+    if (user.role === "super_admin") {
+      throw new Error("super admin role cannot be changed");
+    }
+    user.role = role;
+    return toManagedUser(user);
   }
 
   async authenticate(token: string): Promise<Actor | null> {
@@ -392,7 +411,7 @@ export class PostgresAuthAdapter implements AuthPort {
     }
   }
 
-  async listUsers(search = ""): Promise<ManagedUser[]> {
+  async listUsers(search = "", includeInactive = false): Promise<ManagedUser[]> {
     const keyword = `%${search.trim()}%`;
     const result = await this.pool.query<{
       id: string;
@@ -407,14 +426,17 @@ export class PostgresAuthAdapter implements AuthPort {
     }>(
       `SELECT id, username, student_id, phone, display_name, role, identity_provider, active, created_at
        FROM core.app_user
-       WHERE $1 = '%%'
+       WHERE ($2 = true OR active = true)
+         AND (
+          $1 = '%%'
           OR username ILIKE $1
           OR display_name ILIKE $1
           OR student_id ILIKE $1
           OR phone ILIKE $1
+         )
        ORDER BY created_at DESC, username ASC
        LIMIT 200`,
-      [keyword]
+      [keyword, includeInactive]
     );
 
     return result.rows.map((user) => ({
@@ -561,6 +583,36 @@ export class PostgresAuthAdapter implements AuthPort {
     }
 
     await this.pool.query(`DELETE FROM core.session WHERE user_id = $1`, [targetUserId]);
+  }
+
+  async updateUserRole(
+    targetUserId: string,
+    role: Exclude<Role, "super_admin">
+  ): Promise<ManagedUser> {
+    if (!["admin", "member"].includes(role)) {
+      throw new Error("role must be admin or member");
+    }
+
+    const result = await this.pool.query<{ role: Role }>(
+      `SELECT role FROM core.app_user WHERE id = $1 AND active = true`,
+      [targetUserId]
+    );
+    const user = result.rows[0];
+    if (!user) {
+      throw new Error("active user not found");
+    }
+    if (user.role === "super_admin") {
+      throw new Error("super admin role cannot be changed");
+    }
+
+    await this.pool.query(`UPDATE core.app_user SET role = $1 WHERE id = $2`, [role, targetUserId]);
+    await this.pool.query(`DELETE FROM core.session WHERE user_id = $1`, [targetUserId]);
+
+    const profile = await this.getUserProfile(targetUserId);
+    if (!profile) {
+      throw new Error("user not found");
+    }
+    return profile;
   }
 
   async authenticate(token: string): Promise<Actor | null> {

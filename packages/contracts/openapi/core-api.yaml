@@ -189,6 +189,13 @@ paths:
           schema:
             type: string
           description: 按账号、姓名、学号/工号、手机号模糊搜索
+        - name: includeInactive
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: 是否包含已停用账号；默认只返回启用账号
       responses:
         "200":
           description: OK
@@ -235,6 +242,38 @@ paths:
                     type: boolean
         "403":
           description: 无重置权限
+  /auth/users/{id}/role:
+    patch:
+      summary: 管理员调整用户角色
+      description: 可在 member 与 admin 之间调整；不能调整当前登录账号与 super_admin。
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [admin, member]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManagedUser"
+        "403":
+          description: 无角色管理权限
   /auth/users/{id}:
     delete:
       summary: 管理员删除学员账号
@@ -346,6 +385,72 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Material"
+  /inventory/stock-movements:
+    get:
+      summary: 查询库存流水
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StockMovement"
+  /files:
+    get:
+      summary: 查询文件资料
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 按标题、分类、说明模糊搜索
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LabFile"
+    post:
+      summary: 登记 Synology Drive 文件资料
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, category, driveUrl]
+              properties:
+                title:
+                  type: string
+                category:
+                  type: string
+                  enum: [sop, template, record, other]
+                driveUrl:
+                  type: string
+                  format: uri
+                description:
+                  type: string
+      responses:
+        "201":
+          description: 已登记文件资料
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabFile"
+        "403":
+          description: 无文件管理权限
   /inventory/applications/{id}/approve:
     patch:
       summary: 管理员批准耗材申请
@@ -525,3 +630,46 @@ components:
           format: date-time
         reviewRemark:
           type: string
+    StockMovement:
+      type: object
+      required: [id, materialId, materialName, operatorId, quantity, type, remark, createdAt]
+      properties:
+        id:
+          type: string
+        materialId:
+          type: string
+        materialName:
+          type: string
+        operatorId:
+          type: string
+        quantity:
+          type: integer
+        type:
+          type: string
+          enum: [stock_in, application_out]
+        remark:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    LabFile:
+      type: object
+      required: [id, title, category, driveUrl, description, ownerId, createdAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        category:
+          type: string
+          enum: [sop, template, record, other]
+        driveUrl:
+          type: string
+          format: uri
+        description:
+          type: string
+        ownerId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time

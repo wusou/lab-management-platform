@@ -44,12 +44,13 @@ export interface ManagedUser {
 export interface AuthPort {
   login?(username: string, password: string): Promise<{ token: string; actor: Actor } | null>;
   registerLocalUser?(request: LocalUserRegistrationRequest): Promise<Actor>;
-  listUsers?(search?: string): Promise<ManagedUser[]>;
+  listUsers?(search?: string, includeInactive?: boolean): Promise<ManagedUser[]>;
   getUserProfile?(actorId: string): Promise<ManagedUser | null>;
   changePassword?(actorId: string, currentPassword: string, newPassword: string): Promise<void>;
   updateContact?(actorId: string, phone: string): Promise<ManagedUser>;
   resetUserPassword?(targetUserId: string, newPassword: string): Promise<void>;
   deactivateUser?(targetUserId: string): Promise<void>;
+  updateUserRole?(targetUserId: string, role: Exclude<Role, "super_admin">): Promise<ManagedUser>;
   authenticate(token: string): Promise<Actor | null>;
   assertPermission(actor: Actor, permission: Permission): void;
 }

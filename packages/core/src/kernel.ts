@@ -64,11 +64,11 @@ export class Kernel {
     return this.options.auth.registerLocalUser(request);
   }
 
-  async listUsers(search?: string): Promise<ManagedUser[]> {
+  async listUsers(search?: string, includeInactive = false): Promise<ManagedUser[]> {
     if (!this.options.auth.listUsers) {
       return [];
     }
-    return this.options.auth.listUsers(search);
+    return this.options.auth.listUsers(search, includeInactive);
   }
 
   async getUserProfile(actorId: string): Promise<ManagedUser | null> {
@@ -105,6 +105,16 @@ export class Kernel {
       throw new Error("User deletion is disabled");
     }
     await this.options.auth.deactivateUser(targetUserId);
+  }
+
+  async updateUserRole(
+    targetUserId: string,
+    role: Exclude<LocalUserRegistrationRequest["role"], "super_admin">
+  ): Promise<ManagedUser> {
+    if (!this.options.auth.updateUserRole) {
+      throw new Error("Role update is disabled");
+    }
+    return this.options.auth.updateUserRole(targetUserId, role);
   }
 
   assertPermission(actor: Actor, permission: RegisteredRoute["permission"]): void {

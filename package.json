@@ -2,7 +2,7 @@
   "name": "lab-management-platform",
   "version": "0.1.0",
   "private": true,
-  "description": "实验室管理平台微内核插件化种子工程",
+  "description": "实验室管理平台微内核插件",
   "type": "module",
   "packageManager": "pnpm@9.15.4",
   "engines": {
@@ -17,6 +17,7 @@
     "format:check": "prettier . --check",
     "test": "vitest run",
     "typecheck": "tsc -b --pretty false",
+    "db:migrate": "corepack pnpm --filter @lab/api db:migrate",
     "ci": "corepack pnpm format:check && corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test && corepack pnpm build",
     "prepare": "husky"
   },

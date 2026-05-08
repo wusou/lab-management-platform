@@ -8,6 +8,7 @@ import {
   FlaskConical,
   KeyRound,
   LayoutDashboard,
+  Link as LinkIcon,
   LogOut,
   PackageCheck,
   Send,
@@ -22,6 +23,18 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 
 type Role = "super_admin" | "admin" | "member";
+type Permission =
+  | "user:read"
+  | "user:write"
+  | "inventory:read"
+  | "inventory:write"
+  | "file:read"
+  | "file:write"
+  | "project:read"
+  | "project:write"
+  | "meeting:read"
+  | "meeting:write"
+  | "ai:use";
 type ApplicationStatus = "pending" | "approved" | "rejected";
 
 interface Actor {
@@ -57,6 +70,17 @@ interface InventoryApplication {
   reviewRemark?: string;
 }
 
+interface StockMovement {
+  id: string;
+  materialId: string;
+  materialName: string;
+  operatorId: string;
+  quantity: number;
+  type: "stock_in" | "application_out";
+  remark: string;
+  createdAt: string;
+}
+
 interface Summary {
   materialCount: number;
   lowStockCount: number;
@@ -73,6 +97,18 @@ interface ManagedUser {
   role: Role;
   identityProvider: string;
   active: boolean;
+  createdAt: string;
+}
+
+type FileCategory = "sop" | "template" | "record" | "other";
+
+interface LabFile {
+  id: string;
+  title: string;
+  category: FileCategory;
+  driveUrl: string;
+  description: string;
+  ownerId: string;
   createdAt: string;
 }
 
@@ -97,6 +133,59 @@ function roleText(role: Role) {
   }[role];
 }
 
+function fileCategoryText(category: FileCategory) {
+  return {
+    sop: "SOP",
+    template: "模板",
+    record: "记录",
+    other: "其他"
+  }[category];
+}
+
+const permissionLabels: Record<Permission, string> = {
+  "user:read": "查看账号",
+  "user:write": "管理账号",
+  "inventory:read": "查看库存",
+  "inventory:write": "库存审批",
+  "file:read": "查看文件",
+  "file:write": "管理文件",
+  "project:read": "查看项目",
+  "project:write": "管理项目",
+  "meeting:read": "查看会议",
+  "meeting:write": "管理会议",
+  "ai:use": "使用 AI"
+};
+
+const rolePermissions: Record<Role, Permission[]> = {
+  super_admin: [
+    "user:read",
+    "user:write",
+    "inventory:read",
+    "inventory:write",
+    "file:read",
+    "file:write",
+    "project:read",
+    "project:write",
+    "meeting:read",
+    "meeting:write",
+    "ai:use"
+  ],
+  admin: [
+    "user:read",
+    "user:write",
+    "inventory:read",
+    "inventory:write",
+    "file:read",
+    "file:write",
+    "project:read",
+    "project:write",
+    "meeting:read",
+    "meeting:write",
+    "ai:use"
+  ],
+  member: ["inventory:read", "file:read", "project:read", "meeting:read", "ai:use"]
+};
+
 function App() {
   const [token, setToken] = useState(() => sessionStorage.getItem("lab_token") ?? "");
   const [actor, setActor] = useState<Actor | null>(() => {
@@ -107,6 +196,8 @@ function App() {
   const [password, setPassword] = useState("Admin@123456");
   const [materials, setMaterials] = useState<Material[]>([]);
   const [applications, setApplications] = useState<InventoryApplication[]>([]);
+  const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
+  const [files, setFiles] = useState<LabFile[]>([]);
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [profile, setProfile] = useState<ManagedUser | null>(null);
   const [summary, setSummary] = useState<Summary>({
@@ -126,9 +217,9 @@ function App() {
   const [registerStudentId, setRegisterStudentId] = useState("S000002");
   const [registerDisplayName, setRegisterDisplayName] = useState("学生二号");
   const [registerRole, setRegisterRole] = useState<"admin" | "member">("member");
-  const [accountTab, setAccountTab] = useState<"profile" | "security" | "list" | "register">(
-    "profile"
-  );
+  const [accountTab, setAccountTab] = useState<
+    "profile" | "security" | "list" | "roles" | "register"
+  >("profile");
   const [userSearch, setUserSearch] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -136,9 +227,18 @@ function App() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showAllApplications, setShowAllApplications] = useState(false);
   const [showAllAccounts, setShowAllAccounts] = useState(false);
+  const [showInactiveAccounts, setShowInactiveAccounts] = useState(false);
+  const [movementMaterialFilter, setMovementMaterialFilter] = useState("all");
+  const [movementTypeFilter, setMovementTypeFilter] = useState("all");
+  const [fileSearch, setFileSearch] = useState("");
+  const [fileTitle, setFileTitle] = useState("实验记录模板");
+  const [fileCategory, setFileCategory] = useState<FileCategory>("template");
+  const [fileDriveUrl, setFileDriveUrl] = useState("https://drive.example.local/shared/template");
+  const [fileDescription, setFileDescription] = useState("Synology Drive 共享链接");
 
   const canApprove = actor?.permissions.includes("inventory:write") ?? false;
   const canManageUsers = actor?.permissions.includes("user:write") ?? false;
+  const canManageFiles = actor?.permissions.includes("file:write") ?? false;
 
   function headers(activeToken = token) {
     return {
@@ -188,29 +288,44 @@ function App() {
       return;
     }
 
-    const [summaryResponse, materialsResponse, applicationsResponse] = await Promise.all([
-      fetch(`${apiBase}/inventory/summary`, { headers: headers(activeToken) }),
-      fetch(`${apiBase}/inventory/materials`, { headers: headers(activeToken) }),
-      fetch(`${apiBase}/inventory/applications`, { headers: headers(activeToken) })
-    ]);
+    const [summaryResponse, materialsResponse, applicationsResponse, movementsResponse] =
+      await Promise.all([
+        fetch(`${apiBase}/inventory/summary`, { headers: headers(activeToken) }),
+        fetch(`${apiBase}/inventory/materials`, { headers: headers(activeToken) }),
+        fetch(`${apiBase}/inventory/applications`, { headers: headers(activeToken) }),
+        fetch(`${apiBase}/inventory/stock-movements`, { headers: headers(activeToken) })
+      ]);
 
-    if (!summaryResponse.ok || !materialsResponse.ok || !applicationsResponse.ok) {
+    if (
+      !summaryResponse.ok ||
+      !materialsResponse.ok ||
+      !applicationsResponse.ok ||
+      !movementsResponse.ok
+    ) {
       throw new Error("数据加载失败，请确认 API 容器正在运行或重新登录。");
     }
 
     setSummary(await summaryResponse.json());
     setMaterials(await materialsResponse.json());
     setApplications(await applicationsResponse.json());
+    setStockMovements(await movementsResponse.json());
   }
 
-  async function loadUsers(search = userSearch, activeToken = token) {
+  async function loadUsers(
+    search = userSearch,
+    activeToken = token,
+    includeInactive = showInactiveAccounts
+  ) {
     if (!activeToken || !canManageUsers) {
       return;
     }
 
-    const response = await fetch(`${apiBase}/auth/users?search=${encodeURIComponent(search)}`, {
-      headers: headers(activeToken)
-    });
+    const response = await fetch(
+      `${apiBase}/auth/users?search=${encodeURIComponent(search)}&includeInactive=${includeInactive}`,
+      {
+        headers: headers(activeToken)
+      }
+    );
     const payload = await response.json();
     if (!response.ok) {
       throw new Error(payload.error ?? "账号列表加载失败");
@@ -234,6 +349,21 @@ function App() {
     setContactPhone(payload.phone ?? "");
   }
 
+  async function loadFiles(search = fileSearch, activeToken = token) {
+    if (!activeToken) {
+      return;
+    }
+
+    const response = await fetch(`${apiBase}/files?search=${encodeURIComponent(search)}`, {
+      headers: headers(activeToken)
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error ?? "文件资料加载失败");
+    }
+    setFiles(payload);
+  }
+
   useEffect(() => {
     loadData().catch((error: unknown) => {
       setMessage(error instanceof Error ? error.message : "系统连接失败");
@@ -252,6 +382,9 @@ function App() {
       loadProfile(token).catch(() => {
         // Profile refresh is best-effort for background updates.
       });
+      loadFiles(fileSearch, token).catch(() => {
+        // File refresh is best-effort for background updates.
+      });
     };
     refresh();
     const eventSource = new EventSource(`${apiBase}/events?token=${encodeURIComponent(token)}`);
@@ -266,7 +399,21 @@ function App() {
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [token]);
+  }, [token, fileSearch]);
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      loadFiles().catch((error: unknown) => {
+        setMessage(error instanceof Error ? error.message : "文件资料加载失败");
+      });
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [fileSearch, token]);
 
   useEffect(() => {
     if (!canManageUsers) {
@@ -281,7 +428,7 @@ function App() {
     }, 250);
 
     return () => window.clearTimeout(timeoutId);
-  }, [canManageUsers, userSearch, token]);
+  }, [canManageUsers, userSearch, token, showInactiveAccounts]);
 
   const selectedMaterial = useMemo(
     () => materials.find((material) => material.id === selectedMaterialId),
@@ -300,6 +447,12 @@ function App() {
   const hasMoreApplications = visibleApplications.length > applicationPreviewLimit;
   const displayedUsers = showAllAccounts ? users : users.slice(0, accountPreviewLimit);
   const hasMoreUsers = users.length > accountPreviewLimit;
+  const filteredStockMovements = stockMovements.filter((movement) => {
+    const matchesMaterial =
+      movementMaterialFilter === "all" || movement.materialId === movementMaterialFilter;
+    const matchesType = movementTypeFilter === "all" || movement.type === movementTypeFilter;
+    return matchesMaterial && matchesType;
+  });
 
   async function submitApplication(event: FormEvent) {
     event.preventDefault();
@@ -514,6 +667,58 @@ function App() {
     }
   }
 
+  async function updateUserRole(user: ManagedUser, role: "admin" | "member") {
+    setLoading(true);
+    try {
+      const response = await fetch(`${apiBase}/auth/users/${user.id}/role`, {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({ role })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error ?? "角色更新失败");
+      }
+      setUsers((current) => current.map((item) => (item.id === user.id ? payload : item)));
+      setMessage(`已将 ${user.displayName} 设置为${roleText(role)}。`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "角色更新失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function registerFile(event: FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    try {
+      const response = await fetch(`${apiBase}/files`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({
+          title: fileTitle,
+          category: fileCategory,
+          driveUrl: fileDriveUrl,
+          description: fileDescription
+        })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error ?? "文件登记失败");
+      }
+      setMessage(`已登记文件资料：${payload.title}`);
+      setFileTitle("");
+      setFileDriveUrl("");
+      setFileDescription("");
+      setFileCategory("template");
+      await loadFiles("");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "文件登记失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function deleteUser(user: ManagedUser) {
     const confirmed = window.confirm(`确认删除学员 ${user.displayName}？该账号将无法登录。`);
     if (!confirmed) {
@@ -596,6 +801,10 @@ function App() {
           <a href="#applications">
             <ClipboardList size={18} />
             申请审批
+          </a>
+          <a href="#stock-movements">
+            <PackageCheck size={18} />
+            库存流水
           </a>
           <a href="#files">
             <FileText size={18} />
@@ -816,6 +1025,148 @@ function App() {
           ) : null}
         </section>
 
+        <section className="panel" id="stock-movements">
+          <div className="panel-head">
+            <div>
+              <p className="eyebrow">Stock Ledger</p>
+              <h2>库存流水查询</h2>
+            </div>
+            <span>{filteredStockMovements.length} 条</span>
+          </div>
+
+          <div className="movement-toolbar">
+            <label>
+              耗材
+              <select
+                value={movementMaterialFilter}
+                onChange={(event) => setMovementMaterialFilter(event.target.value)}
+              >
+                <option value="all">全部耗材</option>
+                {materials.map((material) => (
+                  <option key={material.id} value={material.id}>
+                    {material.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              类型
+              <select
+                value={movementTypeFilter}
+                onChange={(event) => setMovementTypeFilter(event.target.value)}
+              >
+                <option value="all">全部类型</option>
+                <option value="stock_in">入库</option>
+                <option value="application_out">审批出库</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="movement-table list-frame">
+            <div className="movement-head">
+              <span>时间</span>
+              <span>耗材</span>
+              <span>类型</span>
+              <span>数量</span>
+              <span>操作人</span>
+              <span>备注</span>
+            </div>
+            {filteredStockMovements.map((movement) => (
+              <div className="movement-row" key={movement.id}>
+                <span>{new Date(movement.createdAt).toLocaleString()}</span>
+                <span>{movement.materialName}</span>
+                <span>{movement.type === "stock_in" ? "入库" : "审批出库"}</span>
+                <span className={movement.quantity < 0 ? "danger" : ""}>{movement.quantity}</span>
+                <span>{movement.operatorId}</span>
+                <span>{movement.remark}</span>
+              </div>
+            ))}
+            {filteredStockMovements.length === 0 ? (
+              <div className="empty-row">暂无符合条件的库存流水。</div>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="panel" id="files">
+          <div className="panel-head">
+            <div>
+              <p className="eyebrow">Files</p>
+              <h2>文件资料</h2>
+            </div>
+            <FileText size={20} />
+          </div>
+
+          <div className="file-layout">
+            <div className="file-list">
+              <label className="search-box">
+                搜索资料
+                <input
+                  placeholder="按标题、类型、说明搜索"
+                  value={fileSearch}
+                  onChange={(event) => setFileSearch(event.target.value)}
+                />
+              </label>
+
+              <div className="file-grid list-frame">
+                {files.map((file) => (
+                  <article className="file-card" key={file.id}>
+                    <div>
+                      <b>{fileCategoryText(file.category)}</b>
+                      <span>{new Date(file.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <h3>{file.title}</h3>
+                    <p>{file.description}</p>
+                    <a href={file.driveUrl} target="_blank" rel="noreferrer">
+                      <LinkIcon size={16} />
+                      打开 Synology Drive 链接
+                    </a>
+                  </article>
+                ))}
+                {files.length === 0 ? <div className="empty-row">暂无文件资料。</div> : null}
+              </div>
+            </div>
+
+            {canManageFiles ? (
+              <form className="file-form" onSubmit={registerFile}>
+                <h3>登记资料链接</h3>
+                <label>
+                  标题
+                  <input value={fileTitle} onChange={(event) => setFileTitle(event.target.value)} />
+                </label>
+                <label>
+                  分类
+                  <select
+                    value={fileCategory}
+                    onChange={(event) => setFileCategory(event.target.value as FileCategory)}
+                  >
+                    <option value="sop">SOP</option>
+                    <option value="template">模板</option>
+                    <option value="record">记录</option>
+                    <option value="other">其他</option>
+                  </select>
+                </label>
+                <label>
+                  Synology Drive 链接
+                  <input
+                    value={fileDriveUrl}
+                    onChange={(event) => setFileDriveUrl(event.target.value)}
+                  />
+                </label>
+                <label>
+                  说明
+                  <textarea
+                    value={fileDescription}
+                    onChange={(event) => setFileDescription(event.target.value)}
+                  />
+                </label>
+                <button className="primary" disabled={loading}>
+                  {loading ? "登记中..." : "登记资料"}
+                </button>
+              </form>
+            ) : null}
+          </div>
+        </section>
+
         <section className="panel member-panel" id="members">
           <div className="panel-head">
             <div>
@@ -848,6 +1199,13 @@ function App() {
                   onClick={() => setAccountTab("list")}
                 >
                   账号列表
+                </button>
+                <button
+                  type="button"
+                  className={accountTab === "roles" ? "selected" : ""}
+                  onClick={() => setAccountTab("roles")}
+                >
+                  角色权限
                 </button>
                 <button
                   type="button"
@@ -939,14 +1297,24 @@ function App() {
 
           {accountTab === "list" && canManageUsers ? (
             <div className="account-list">
-              <label className="search-box">
-                搜索账号
-                <input
-                  placeholder="按账号、姓名、学号/工号搜索"
-                  value={userSearch}
-                  onChange={(event) => setUserSearch(event.target.value)}
-                />
-              </label>
+              <div className="account-toolbar">
+                <label className="search-box">
+                  搜索账号
+                  <input
+                    placeholder="按账号、姓名、学号/工号搜索"
+                    value={userSearch}
+                    onChange={(event) => setUserSearch(event.target.value)}
+                  />
+                </label>
+                <label className="toggle-line">
+                  <input
+                    type="checkbox"
+                    checked={showInactiveAccounts}
+                    onChange={(event) => setShowInactiveAccounts(event.target.checked)}
+                  />
+                  显示停用账号
+                </label>
+              </div>
 
               <div className={`account-table list-frame ${showAllAccounts ? "expanded" : ""}`}>
                 <div className="account-head">
@@ -965,7 +1333,23 @@ function App() {
                     <span>{user.displayName}</span>
                     <span>{user.studentId ?? "-"}</span>
                     <span>{user.phone ?? "-"}</span>
-                    <span>{roleText(user.role)}</span>
+                    <span>
+                      {user.active && user.id !== actor.id && user.role !== "super_admin" ? (
+                        <select
+                          className="role-select"
+                          value={user.role}
+                          disabled={loading}
+                          onChange={(event) =>
+                            updateUserRole(user, event.target.value as "admin" | "member")
+                          }
+                        >
+                          <option value="member">成员</option>
+                          <option value="admin">管理员</option>
+                        </select>
+                      ) : (
+                        roleText(user.role)
+                      )}
+                    </span>
                     <span>{user.identityProvider}</span>
                     <span>{user.active ? "启用" : "停用"}</span>
                     <span className="row-actions">
@@ -1000,6 +1384,29 @@ function App() {
                     : `展示更多（还有 ${users.length - accountPreviewLimit} 个）`}
                 </button>
               ) : null}
+            </div>
+          ) : null}
+
+          {accountTab === "roles" && canManageUsers ? (
+            <div className="role-permission-grid">
+              {(["member", "admin", "super_admin"] as Role[]).map((role) => (
+                <article className="role-permission-card" key={role}>
+                  <div>
+                    <ShieldCheck size={22} />
+                    <h3>{roleText(role)}</h3>
+                  </div>
+                  <p>
+                    {role === "member"
+                      ? "普通成员只保留申请、查看资料与参与项目的基础权限。"
+                      : "管理员负责账号、库存、文件、项目与会议的日常管理。"}
+                  </p>
+                  <div className="permission-pills">
+                    {rolePermissions[role].map((permission) => (
+                      <span key={permission}>{permissionLabels[permission]}</span>
+                    ))}
+                  </div>
+                </article>
+              ))}
             </div>
           ) : null}
 
@@ -1053,7 +1460,7 @@ function App() {
 
         <section className="module-strip">
           <ModuleCard title="项目任务" text="项目、任务、看板入口已预留。" />
-          <ModuleCard title="文件资料" text="Synology Drive 适配入口已预留。" />
+          <ModuleCard title="文件资料" text="当前支持 Synology Drive 共享链接登记。" />
           <ModuleCard title="统一认证" text="ids.xmu.edu.cn 适配器后续接入。" />
         </section>
       </section>

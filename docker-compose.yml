@@ -12,6 +12,7 @@ services:
       - /workspace/node_modules
       - /workspace/apps/api/node_modules
       - /workspace/packages/core/node_modules
+      - /workspace/plugins/files/node_modules
       - /workspace/plugins/inventory/node_modules
     depends_on:
       postgres:

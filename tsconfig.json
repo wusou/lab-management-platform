@@ -3,6 +3,7 @@
   "references": [
     { "path": "packages/contracts" },
     { "path": "packages/core" },
+    { "path": "plugins/files" },
     { "path": "plugins/hello-world" },
     { "path": "plugins/inventory" },
     { "path": "apps/api" },

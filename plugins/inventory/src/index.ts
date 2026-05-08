@@ -31,6 +31,17 @@ interface InventoryApplication {
   reviewRemark?: string;
 }
 
+interface StockMovement {
+  id: string;
+  materialId: string;
+  materialName: string;
+  operatorId: string;
+  quantity: number;
+  type: "stock_in" | "application_out";
+  remark: string;
+  createdAt: string;
+}
+
 interface InventoryApplicationRequest {
   materialId: string;
   quantity: number;
@@ -56,6 +67,7 @@ interface InventoryRepository {
   }>;
   listMaterials(): Promise<Material[]>;
   listApplications(): Promise<InventoryApplication[]>;
+  listStockMovements(): Promise<StockMovement[]>;
   createApplication(input: {
     actorId: string;
     materialId: string;
@@ -140,6 +152,7 @@ const seedApplications: InventoryApplication[] = [
 class MemoryInventoryRepository implements InventoryRepository {
   private readonly materials = structuredClone(seedMaterials);
   private readonly applications = structuredClone(seedApplications);
+  private readonly stockMovements: StockMovement[] = [];
 
   async initialize(): Promise<void> {
     return Promise.resolve();
@@ -165,6 +178,10 @@ class MemoryInventoryRepository implements InventoryRepository {
 
   async listApplications(): Promise<InventoryApplication[]> {
     return [...this.applications].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async listStockMovements(): Promise<StockMovement[]> {
+    return [...this.stockMovements].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   async createApplication(input: {
@@ -221,7 +238,16 @@ class MemoryInventoryRepository implements InventoryRepository {
     application.status = "approved";
     application.reviewedAt = new Date().toISOString();
     application.reviewRemark = remark?.trim() || "审批通过";
-    void reviewerId;
+    this.stockMovements.unshift({
+      id: randomUUID(),
+      materialId: material.id,
+      materialName: material.name,
+      operatorId: reviewerId,
+      quantity: -application.quantity,
+      type: "application_out",
+      remark: "审批出库",
+      createdAt: new Date().toISOString()
+    });
     return application;
   }
 
@@ -247,13 +273,25 @@ class MemoryInventoryRepository implements InventoryRepository {
 
   async stockInMaterial(
     materialId: string,
-    quantity: number
+    quantity: number,
+    remark = "耗材入库",
+    actorId = "memory-admin"
   ): Promise<Material | { error: string; status: number }> {
     const material = this.materials.find((item) => item.id === materialId);
     if (!material) {
       return { status: 404, error: "Material not found" };
     }
     material.stock += quantity;
+    this.stockMovements.unshift({
+      id: randomUUID(),
+      materialId: material.id,
+      materialName: material.name,
+      operatorId: actorId,
+      quantity,
+      type: "stock_in",
+      remark: remark.trim() || "耗材入库",
+      createdAt: new Date().toISOString()
+    });
     return material;
   }
 }
@@ -412,6 +450,25 @@ class PostgresInventoryRepository implements InventoryRepository {
       "SELECT * FROM inventory.application ORDER BY created_at DESC"
     );
     return result.rows.map(mapApplicationRow);
+  }
+
+  async listStockMovements(): Promise<StockMovement[]> {
+    const result = await this.pool.query(
+      `SELECT
+        sm.id,
+        sm.material_id,
+        m.name AS material_name,
+        sm.operator_id,
+        sm.quantity,
+        sm.type,
+        sm.remark,
+        sm.created_at
+       FROM inventory.stock_movement sm
+       JOIN inventory.material m ON m.id = sm.material_id
+       ORDER BY sm.created_at DESC
+       LIMIT 200`
+    );
+    return result.rows.map(mapStockMovementRow);
   }
 
   async createApplication(input: {
@@ -648,6 +705,19 @@ function mapApplicationRow(row: Record<string, unknown>): InventoryApplication {
   };
 }
 
+function mapStockMovementRow(row: Record<string, unknown>): StockMovement {
+  return {
+    id: String(row.id),
+    materialId: String(row.material_id),
+    materialName: String(row.material_name),
+    operatorId: String(row.operator_id),
+    quantity: Number(row.quantity),
+    type: row.type as StockMovement["type"],
+    remark: String(row.remark),
+    createdAt: new Date(String(row.created_at)).toISOString()
+  };
+}
+
 function createRepository(): InventoryRepository {
   if (!process.env.DATABASE_URL) {
     return new MemoryInventoryRepository();
@@ -665,7 +735,12 @@ export const inventoryPlugin: PluginManifest = {
   name: "inventory",
   version: "0.1.0",
   description: "耗材与实验室设备申请模块 MVP",
-  capabilities: ["inventory:materials", "inventory:application-request", "inventory:approval"],
+  capabilities: [
+    "inventory:materials",
+    "inventory:application-request",
+    "inventory:approval",
+    "inventory:stock-movement-query"
+  ],
   routes: [
     {
       method: "GET",
@@ -684,6 +759,12 @@ export const inventoryPlugin: PluginManifest = {
       path: "/inventory/applications",
       permission: "inventory:read",
       summary: "获取耗材申请列表"
+    },
+    {
+      method: "GET",
+      path: "/inventory/stock-movements",
+      permission: "inventory:read",
+      summary: "查询库存流水"
     },
     {
       method: "POST",
@@ -743,6 +824,13 @@ export const inventoryPlugin: PluginManifest = {
           permission: "inventory:read",
           summary: "获取耗材申请列表",
           handler: async () => ({ body: await repository.listApplications() })
+        },
+        {
+          method: "GET",
+          path: "/inventory/stock-movements",
+          permission: "inventory:read",
+          summary: "查询库存流水",
+          handler: async () => ({ body: await repository.listStockMovements() })
         },
         {
           method: "POST",
@@ -826,6 +914,18 @@ export const inventoryPlugin: PluginManifest = {
               return { status: material.status, body: { error: material.error } };
             }
 
+            await context.audit.record({
+              actorId: actor.id,
+              action: "inventory.stock_in",
+              targetType: "inventory_material",
+              targetId: material.id,
+              occurredAt: new Date().toISOString(),
+              metadata: {
+                materialId: material.id,
+                quantity: request.quantity
+              }
+            });
+
             return { body: material };
           }
         },
@@ -858,6 +958,18 @@ export const inventoryPlugin: PluginManifest = {
               })
             );
 
+            await context.audit.record({
+              actorId: actor.id,
+              action: "inventory.application.approved",
+              targetType: "inventory_application",
+              targetId: application.id,
+              occurredAt: new Date().toISOString(),
+              metadata: {
+                materialId: application.materialId,
+                quantity: application.quantity
+              }
+            });
+
             return { body: application };
           }
         },
@@ -887,6 +999,18 @@ export const inventoryPlugin: PluginManifest = {
                 reviewerId: actor.id
               })
             );
+
+            await context.audit.record({
+              actorId: actor.id,
+              action: "inventory.application.rejected",
+              targetType: "inventory_application",
+              targetId: application.id,
+              occurredAt: new Date().toISOString(),
+              metadata: {
+                materialId: application.materialId,
+                quantity: application.quantity
+              }
+            });
 
             return { body: application };
           }

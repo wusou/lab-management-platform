@@ -14,6 +14,12 @@ CREATE TABLE IF NOT EXISTS core.audit_log (
   occurred_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE INDEX IF NOT EXISTS audit_log_occurred_at_idx
+  ON core.audit_log (occurred_at DESC);
+
+CREATE INDEX IF NOT EXISTS audit_log_actor_action_idx
+  ON core.audit_log (actor_id, action);
+
 CREATE TABLE IF NOT EXISTS core.app_user (
   id TEXT PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,

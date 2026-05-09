@@ -18,31 +18,151 @@
 
 ## 快速启动
 
-前置条件：
+本项目推荐使用 Docker Compose 运行开发环境。PostgreSQL 会由 Docker 自动启动，组员首次体验不需要单独安装 PostgreSQL。
 
-- 已安装并启动 Docker Desktop。
-- Windows 推荐启用 WSL 2 后端。
-- 本仓库开发环境默认使用 Docker Compose，首次体验不需要单独安装 PostgreSQL。
+### 1. 推荐安装目录
 
-首次启动：
+为避免 C 盘空间不足，建议提前准备这些目录：
+
+```text
+E:\Dependencies\DockerDesktop
+E:\VirtualMachines\WSL
+E:\VirtualMachines\DockerData
+F:\program
+```
+
+目录只是示例，组员可以按自己电脑磁盘调整。不要把个人电脑的绝对路径写入项目文件，只在本机安装软件或配置环境变量时使用。
+
+### 2. Windows 必备环境
+
+建议使用 Windows 10/11 + WSL 2 + Docker Desktop。
+
+用管理员 PowerShell 检查 WSL：
 
 ```powershell
+wsl --version
+wsl --status
+```
+
+如果提示没有 WSL，先安装或更新：
+
+```powershell
+wsl --update
+wsl --set-default-version 2
+```
+
+如果需要安装 Ubuntu，并且希望放在非 C 盘，优先使用：
+
+```powershell
+wsl --install -d Ubuntu-24.04 --location "E:\VirtualMachines\WSL\Ubuntu-24.04"
+```
+
+如果你的 WSL 版本不支持 `--location`，可以先正常安装，再用导出/导入迁移到非 C 盘。注意：`--unregister` 会删除原发行版，迁移前确认已经导出成功。
+
+```powershell
+wsl --install -d Ubuntu-24.04
+wsl --shutdown
+wsl --export Ubuntu-24.04 "E:\VirtualMachines\WSL\Ubuntu-24.04.tar"
+wsl --unregister Ubuntu-24.04
+wsl --import Ubuntu-24.04 "E:\VirtualMachines\WSL\Ubuntu-24.04" "E:\VirtualMachines\WSL\Ubuntu-24.04.tar" --version 2
+```
+
+安装完成后进入 Ubuntu，创建 Linux 用户并设置密码。Docker Desktop 使用 WSL 2 后端时会自动和 WSL 集成。
+
+### 3. 安装 Docker Desktop 到非 C 盘
+
+从 Docker 官网下载 `Docker Desktop Installer.exe`。如果安装器支持命令行安装，可以用管理员 PowerShell 指定程序目录：
+
+```powershell
+Start-Process -Wait -FilePath "E:\Downloads\Docker Desktop Installer.exe" -ArgumentList 'install','--accept-license','--installation-dir=E:\Dependencies\DockerDesktop' -Verb RunAs
+```
+
+如果使用图形界面安装：
+
+1. 勾选 `Use WSL 2 instead of Hyper-V`。
+2. 一般不需要勾选 `Allow Windows Containers`。
+3. 安装完成后重启电脑。
+4. 打开 Docker Desktop，等待左下角显示 Docker Engine running。
+5. 在 Docker Desktop 设置中检查 WSL Integration，启用当前 Ubuntu。
+
+Docker Desktop 的程序目录和 Docker 镜像/容器数据目录不是一回事。程序可以装到 `E:\Dependencies\DockerDesktop`，镜像和容器数据建议在 Docker Desktop 设置里调整到非 C 盘：
+
+```text
+Docker Desktop -> Settings -> Resources -> Advanced -> Disk image location
+```
+
+可以设置为：
+
+```text
+E:\VirtualMachines\DockerData
+```
+
+不同 Docker Desktop 版本界面名称可能略有差异，核心目标是把 Docker data / disk image 放到非 C 盘。
+
+### 4. 检查 Docker 命令
+
+打开新的 PowerShell，执行：
+
+```powershell
+docker version
+docker compose version
+```
+
+如果提示 `docker` 不是内部或外部命令，通常是 Docker Desktop 没有加入 PATH，或者终端打开得太早。先重启终端或电脑。
+
+仍然找不到时，把 Docker Desktop 安装目录下的 `resources\bin` 加入 Windows 用户或系统环境变量 `Path`。例如你的 Docker 安装在：
+
+```text
+E:\Dependencies\DockerDesktop
+```
+
+则 PATH 中应包含：
+
+```text
+E:\Dependencies\DockerDesktop\resources\bin
+```
+
+不要在 README、代码或 compose 文件里写某个人电脑上的 Docker 绝对路径。
+
+### 5. 获取项目代码
+
+推荐把项目放在非 C 盘，例如：
+
+```powershell
+cd F:\program
 git clone https://github.com/wusou/lab-management-platform.git
 cd lab-management-platform
+```
+
+如果已经下载过项目：
+
+```powershell
+cd F:\program\lab-management-platform
+git pull
+```
+
+如果你的上级目录叫 `managenment-platform` 或其他名字也没关系，只要进入项目根目录，也就是包含 `docker-compose.yml`、`package.json`、`apps`、`plugins` 的目录。
+
+### 6. 启动项目
+
+首次启动或依赖变化后：
+
+```powershell
 docker compose up --build -d
 ```
 
-如果是已有仓库拉取新代码，或刚新增依赖/插件，建议刷新匿名依赖卷：
+查看容器状态：
 
 ```powershell
-git pull
-docker compose up --build -d -V api web
+docker compose ps
 ```
 
-如果数据库结构有更新，执行一次迁移：
+正常应看到：
 
-```powershell
-docker compose exec api pnpm --filter @lab/api db:migrate
+```text
+api       running
+web       running
+postgres  healthy
 ```
 
 访问地址：
@@ -60,6 +180,86 @@ docker compose exec api pnpm --filter @lab/api db:migrate
 
 这两个账号只在 `NODE_ENV=development` 且 `LAB_SEED_DEMO_ACCOUNTS` 未设置为 `false` 时自动初始化，方便本地演示和测试。登录页不会展示或自动填充默认账号；生产环境应设置 `LAB_SEED_DEMO_ACCOUNTS=false`，并通过初始化管理员、统一认证或管理员后台创建正式账号。
 
+### 7. 更新代码后的启动方式
+
+如果只是普通代码更新：
+
+```powershell
+git pull
+docker compose up --build -d
+```
+
+如果新增了依赖、插件或容器内提示找不到包，刷新匿名依赖卷：
+
+```powershell
+docker compose up --build -d -V api web
+```
+
+如果数据库结构有更新，执行迁移：
+
+```powershell
+docker compose exec api pnpm --filter @lab/api db:migrate
+```
+
+### 8. 常见问题
+
+`docker` 命令找不到：
+
+- 确认 Docker Desktop 已启动。
+- 重启 PowerShell。
+- 检查 Docker Desktop 的 `resources\bin` 是否在 Windows `Path` 中。
+
+无法连接 Docker API，提示 `dockerDesktopLinuxEngine`：
+
+- Docker Desktop 还没启动完成。
+- Docker Engine 没有运行。
+- WSL 后端异常，尝试：
+
+```powershell
+wsl --shutdown
+```
+
+然后重新打开 Docker Desktop。
+
+端口被占用：
+
+- 前端默认端口：`5173`
+- API 默认端口：`3000`
+- PostgreSQL 默认端口：`5432`
+
+可以先查看占用：
+
+```powershell
+netstat -ano | findstr :5173
+netstat -ano | findstr :3000
+netstat -ano | findstr :5432
+```
+
+容器一直不健康：
+
+```powershell
+docker compose logs -f postgres
+docker compose logs -f api
+docker compose logs -f web
+```
+
+页面还是旧版本：
+
+```powershell
+docker compose up --build -d -V api web
+```
+
+然后浏览器强制刷新。
+
+想清空本地数据库重新初始化：
+
+```powershell
+docker compose down -v
+docker compose up --build -d
+```
+
+注意：`down -v` 会删除本地 Docker volume 中的数据库数据，只适合开发环境。
+
 ## 常用命令
 
 ```powershell
@@ -71,8 +271,6 @@ docker compose up --build -d
 docker compose logs -f api
 docker compose ps
 ```
-
-Windows 上如果 `docker` 命令找不到，说明 Docker Desktop 没有正确加入系统 PATH，或终端启动早于 Docker 安装。优先重启终端/电脑；仍不行时，在 Docker Desktop 安装目录中找到 `resources\bin`，把它加入 Windows 系统环境变量 `Path`，不要把个人电脑的绝对路径写入项目文件。
 
 项目文档和配置必须保持跨机器可用，不能提交个人电脑上的绝对安装路径。
 

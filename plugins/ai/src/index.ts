@@ -21,6 +21,7 @@ interface ChatResponse {
 interface KnowledgeSource {
   id: string;
   title: string;
+  content: string;
   snippet: string;
 }
 
@@ -280,6 +281,7 @@ class PostgresKnowledgeRepository implements KnowledgeRepository {
     return result.rows.map((row) => ({
       id: row.id,
       title: row.title,
+      content: row.content,
       snippet: row.content.slice(0, 300) + (row.content.length > 300 ? "..." : "")
     }));
   }
@@ -413,7 +415,7 @@ class PostgresFaqTemplateRepository implements FaqTemplateRepository {
 
 // ── Row Mappers ────────────────────────────────────────
 
-function mapKnowledgeRow(row: Record<string, unknown>): KnowledgeDocument {
+function mapKnowledgeRow(row: Record<string, unknown> | { [key: string]: unknown }): KnowledgeDocument {
   return {
     id: String(row.id),
     title: String(row.title),

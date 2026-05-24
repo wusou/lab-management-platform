@@ -1263,26 +1263,60 @@ textarea {
 .ai-chat-input {
   display: flex;
   gap: 8px;
-  align-items: center;
+  align-items: flex-end;
 }
 
-.ai-chat-input input {
+.ai-chat-input-wrap {
   flex: 1;
-  padding: 10px 14px;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+}
+
+.ai-chat-input textarea {
+  width: 100%;
+  padding: 10px 44px 10px 14px;
   border: 1px solid #c8d4cb;
   border-radius: 8px;
   font-size: .9rem;
+  font-family: inherit;
+  line-height: 1.5;
   outline: none;
   background: #fff;
+  resize: none;
+  overflow-y: auto;
+  max-height: 120px;
 }
 
-.ai-chat-input input:focus {
+.ai-chat-input textarea:focus {
   border-color: #527263;
   box-shadow: 0 0 0 2px rgba(82, 114, 99, .15);
 }
 
-.ai-chat-input button {
+.ai-chat-input .send-btn {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: #527263;
+  color: #fff;
+  cursor: pointer;
+  padding: 0;
   flex-shrink: 0;
+}
+
+.ai-chat-input .send-btn:disabled {
+  background: #b0c0b6;
+  cursor: not-allowed;
+}
+
+.ai-chat-input .send-btn:hover:not(:disabled) {
+  background: #3f564b;
 }
 
 .ai-faq-sidebar {

@@ -96,11 +96,11 @@ AI 模块采用**可插拔的 AI 提供商架构**，支持两种接入方式，
    OPENAI_API_KEY=sk-your-api-key-here
    OPENAI_MODEL=gpt-4o-mini
 
-   # 或使用 DeepSeek
+   # 或使用 DeepSeek（完全兼容 OpenAI 接口，无需改代码）
    AI_PROVIDER=openai
-   OPENAI_BASE_URL=https://api.deepseek.com/v1
+   OPENAI_BASE_URL=https://api.deepseek.com
    OPENAI_API_KEY=sk-your-deepseek-key
-   OPENAI_MODEL=deepseek-chat
+   OPENAI_MODEL=deepseek-v4-pro
 
    # 或使用阿里云百炼（通义千问）
    AI_PROVIDER=openai
@@ -108,6 +108,40 @@ AI 模块采用**可插拔的 AI 提供商架构**，支持两种接入方式，
    OPENAI_API_KEY=sk-your-qwen-key
    OPENAI_MODEL=qwen-plus
    ```
+
+**DeepSeek 模型说明（官方文档：https://api-docs.deepseek.com ）：**
+
+| 模型名 | 状态 | 说明 |
+|--------|------|------|
+| `deepseek-v4-pro` | ✅ 推荐 | 最新旗舰模型，最强效果 |
+| `deepseek-v4-flash` | ✅ 推荐 | 最新轻量模型，速度快性价比高 |
+| `deepseek-chat` | ⚠️ 将弃用 | 已映射为 `deepseek-v4-flash` 非思考模式 |
+| `deepseek-reasoner` | ⚠️ 将弃用 | 已映射为 `deepseek-v4-flash` 思考模式 |
+
+> **注意**：`deepseek-chat` 和 `deepseek-reasoner` 将于 **2026年7月24日** 停用，请直接使用 `deepseek-v4-pro` 或 `deepseek-v4-flash`。
+
+**思考模式（Reasoning / Thinking）：**
+
+`deepseek-v4-pro` 和 `deepseek-v4-flash` 支持思考模式，通过 `reasoning_effort` 参数控制推理深度：
+- `"reasoning_effort": "high"` — 深度推理，适合复杂数学、逻辑问题
+- `"thinking": {"type": "enabled"}` — 开启思考链输出
+
+DeepSeek API 同时兼容 **OpenAI 格式**（`/chat/completions`）和 **Anthropic 格式**（`/anthropic`），无需修改代码即可迁移。还支持直接作为 Claude Code、GitHub Copilot、OpenCode 等 Agent 工具的后端模型。
+
+```bash
+# cURL 测试 DeepSeek API（官方示例）
+curl https://api.deepseek.com/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${DEEPSEEK_API_KEY}" \
+  -d '{
+    "model": "deepseek-v4-pro",
+    "messages": [
+      {"role": "system", "content": "You are a helpful assistant."},
+      {"role": "user", "content": "Hello!"}
+    ],
+    "stream": false
+  }'
+```
 
 ### 方式三：其他开源项目集成
 

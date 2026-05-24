@@ -2614,16 +2614,33 @@ function App() {
                   </div>
                 ) : null}
 
-                <form className="ai-chat-input" onSubmit={sendAiMessage}>
-                  <input
-                    placeholder="输入你的问题，例如：如何申请实验耗材？"
-                    value={aiMessage}
-                    onChange={(event) => setAiMessage(event.target.value)}
-                    disabled={aiLoading}
-                  />
-                  <button type="submit" className="primary" disabled={aiLoading || !aiMessage.trim()}>
-                    <Send size={16} />
-                  </button>
+                <form
+                  className="ai-chat-input"
+                  onSubmit={(e) => { e.preventDefault(); void sendAiMessage(); }}
+                >
+                  <div className="ai-chat-input-wrap">
+                    <textarea
+                      placeholder="输入你的问题，Enter 发送，Shift+Enter 换行"
+                      value={aiMessage}
+                      rows={1}
+                      onChange={(event) => {
+                        setAiMessage(event.target.value);
+                        const el = event.currentTarget;
+                        el.style.height = "auto";
+                        el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && !event.shiftKey) {
+                          event.preventDefault();
+                          void sendAiMessage();
+                        }
+                      }}
+                      disabled={aiLoading}
+                    />
+                    <button type="submit" className="send-btn" disabled={aiLoading || !aiMessage.trim()} title="发送 (Enter)">
+                      <Send size={15} />
+                    </button>
+                  </div>
                   {aiChatMessages.length > 0 ? (
                     <button type="button" className="ghost" onClick={clearAiHistory} title="清除历史">
                       <Trash2 size={16} />

@@ -56,6 +56,9 @@ importers:
       '@lab/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@lab/plugin-ai':
+        specifier: workspace:*
+        version: link:../../plugins/ai
       '@lab/plugin-collaboration':
         specifier: workspace:*
         version: link:../../plugins/collaboration
@@ -111,6 +114,19 @@ importers:
 
   packages/core:
     dependencies:
+      pg:
+        specifier: ^8.20.0
+        version: 8.20.0
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.20.0
+        version: 8.20.0
+
+  plugins/ai:
+    dependencies:
+      '@lab/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       pg:
         specifier: ^8.20.0
         version: 8.20.0

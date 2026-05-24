@@ -12,7 +12,7 @@
     "declarationMap": true,
     "sourceMap": true,
     "baseUrl": ".",
-    "ignoreDeprecations": "5.0",
+    "ignoreDeprecations": "6.0",
     "paths": {
       "@lab/core": ["packages/core/src/index.ts"],
       "@lab/contracts": ["packages/contracts/src/index.ts"],

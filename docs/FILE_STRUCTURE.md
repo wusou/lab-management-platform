@@ -58,6 +58,7 @@
 | 路径                    | 作用                                        |
 | ----------------------- | ------------------------------------------- |
 | `plugins/hello-world`   | 示例插件                                    |
+| `plugins/ai`            | AI 智能问答、知识库、RAG 对话               |
 | `plugins/collaboration` | 会议、公告、站内通知插件                    |
 | `plugins/inventory`     | 耗材、申请审批、库存流水                    |
 | `plugins/files`         | 文件资料、文件夹、权限、版本与 NAS 链接兼容 |

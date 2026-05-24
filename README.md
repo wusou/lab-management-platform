@@ -12,6 +12,7 @@
 - 实时刷新：通过 SSE 接收申请和审批变化
 - 库存流水：查询入库和审批出库记录
 - 文件资料：文件夹、标签、权限、小文件直传、版本记录、Synology Drive 链接兼容
+- AI 智能问答：LLM 对话、知识库 RAG 问答、FAQ 模板
 - 会议通知：会议预约、会议完成标记、站内通知、全局公告
 - 审计日志：关键动作写入 PostgreSQL
 - 生产部署：Nginx、生产 Compose、环境变量、数据库迁移脚本
@@ -277,20 +278,50 @@ docker compose ps
 ## 项目结构
 
 ```text
-apps/
-  api/                 Fastify API 宿主，注册核心能力和插件路由
-  web/                 React + Vite 前端应用
-packages/
-  core/                微内核：认证、权限、审计、事件、插件契约
-  contracts/           OpenAPI 和跨模块共享契约
-plugins/
-  inventory/           耗材库存、申请审批、库存流水插件
-  files/               文件资料、权限、标签、版本与 NAS 链接兼容插件
-  collaboration/       会议、公告、站内通知插件
-  hello-world/         示例插件
-infra/
-  postgres/            数据库初始化和迁移 SQL
-  nginx/               生产 Nginx 配置
+lab-management-platform/
+├── .github/
+│   └── workflows/
+│       └── ci.yml                         GitHub Actions CI
+├── apps/
+│   ├── api/                               Fastify API 宿主
+│   │   ├── src/
+│   │   │   ├── adapters.ts                外部适配器装配
+│   │   │   ├── kernel.ts                  插件注册入口
+│   │   │   ├── main.ts                    API 路由与服务启动
+│   │   │   └── migrate.ts                 数据库迁移执行器
+│   │   └── test/                          API 集成测试
+│   └── web/                               React + Vite 前端
+│       ├── src/
+│       │   ├── main.tsx                   页面与交互入口
+│       │   └── styles.css                 全局样式
+│       └── index.html
+├── docs/                                  项目文档
+│   ├── API.md                             API 使用说明
+│   ├── CONTRIBUTING.md                    协作规范
+│   ├── DEPLOYMENT.md                      生产部署说明
+│   ├── DEVELOPMENT.md                     开发指南
+│   ├── FILE_STRUCTURE.md                  文件作用说明
+│   ├── PROJECT_PROGRESS.md                项目进度
+│   └── SYNOLOGY_DRIVE_ADAPTER.md          NAS 适配说明
+├── infra/
+│   ├── nginx/                             生产 Nginx 配置
+│   └── postgres/                          数据库初始化与迁移 SQL
+├── packages/
+│   ├── contracts/                         OpenAPI 与共享契约
+│   └── core/                              微内核：认证、权限、审计、事件、插件契约
+├── plugins/
+│   ├── collaboration/                     会议、公告、站内通知插件
+│   ├── files/                             文件资料、权限、标签、版本与 NAS 链接插件
+│   ├── hello-world/                       示例插件
+│   └── inventory/                         耗材库存、申请审批、库存流水插件
+├── .env.example                           开发环境变量模板
+├── .env.production.example                生产环境变量模板
+├── docker-compose.yml                     开发 Docker Compose
+├── docker-compose.prod.yml                生产 Docker Compose
+├── Dockerfile                             API/Web 多阶段构建
+├── package.json                           根工作区脚本与依赖
+├── pnpm-workspace.yaml                    pnpm workspace 配置
+└── tsconfig.json                          TypeScript 工程引用
 ```
 
 ## 文档入口
@@ -303,6 +334,7 @@ infra/
 - [docs/plugin-template.md](./docs/plugin-template.md)：新增插件模板
 - [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)：生产部署、Nginx、HTTPS、迁移
 - [docs/SYNOLOGY_DRIVE_ADAPTER.md](./docs/SYNOLOGY_DRIVE_ADAPTER.md)：Synology Drive 后续适配说明
+- [docs/AI_MODULE.md](./docs/AI_MODULE.md)：AI 模块接入指南、模型配置、知识库管理
 
 ## 架构原则
 

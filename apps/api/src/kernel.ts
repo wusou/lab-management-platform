@@ -1,4 +1,5 @@
 import { createAuthAdapter, Kernel } from "@lab/core";
+import { aiPlugin } from "@lab/plugin-ai";
 import { collaborationPlugin } from "@lab/plugin-collaboration";
 import { filesPlugin } from "@lab/plugin-files";
 import { helloWorldPlugin } from "@lab/plugin-hello-world";
@@ -25,6 +26,7 @@ export async function createKernel(): Promise<Kernel> {
   await kernel.register(inventoryPlugin);
   await kernel.register(filesPlugin);
   await kernel.register(collaborationPlugin);
+  await kernel.register(aiPlugin);
 
   return kernel;
 }

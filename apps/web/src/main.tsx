@@ -1,5 +1,7 @@
 import {
   Bell,
+  BookOpen,
+  Bot,
   Boxes,
   CalendarClock,
   CheckCircle2,
@@ -9,15 +11,19 @@ import {
   FileText,
   FlaskConical,
   Folder,
+  HelpCircle,
   KeyRound,
   LayoutDashboard,
   Link as LinkIcon,
   LogOut,
   Megaphone,
+  MessageCircle,
   PackageCheck,
+  Plus,
   Send,
   ShieldCheck,
   Smartphone,
+  Trash2,
   Upload,
   Users,
   XCircle
@@ -177,6 +183,48 @@ interface NotificationItem {
   relatedId?: string;
   readAt?: string;
   createdBy: string;
+  createdAt: string;
+}
+
+interface ChatMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+}
+
+interface KnowledgeSource {
+  id: string;
+  title: string;
+  snippet: string;
+}
+
+interface ChatResponse {
+  reply: string;
+  sources?: KnowledgeSource[];
+}
+
+interface KnowledgeDocument {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
+  tags: string[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface FaqTemplate {
+  id: string;
+  question: string;
+  category: string;
+  sortOrder: number;
+}
+
+interface ChatHistoryRecord {
+  id: string;
+  userId: string;
+  role: "user" | "assistant";
+  content: string;
   createdAt: string;
 }
 
@@ -376,6 +424,20 @@ function App() {
   const [announcementTitle, setAnnouncementTitle] = useState("实验室通知");
   const [announcementContent, setAnnouncementContent] = useState("请及时查看本周会议安排。");
   const [selectedNotification, setSelectedNotification] = useState<NotificationItem | null>(null);
+  const [aiMessage, setAiMessage] = useState("");
+  const [aiChatMessages, setAiChatMessages] = useState<ChatMessage[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [aiSources, setAiSources] = useState<KnowledgeSource[]>([]);
+  const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDocument[]>([]);
+  const [faqTemplates, setFaqTemplates] = useState<FaqTemplate[]>([]);
+  const [knowledgeTitle, setKnowledgeTitle] = useState("");
+  const [knowledgeContent, setKnowledgeContent] = useState("");
+  const [knowledgeCategory, setKnowledgeCategory] = useState("general");
+  const [knowledgeTags, setKnowledgeTags] = useState("");
+  const [editingKnowledgeId, setEditingKnowledgeId] = useState("");
+  const [showKnowledgePanel, setShowKnowledgePanel] = useState(false);
+  const [aiActiveTab, setAiActiveTab] = useState<"chat" | "knowledge">("chat");
   const didMountToast = useRef(false);
 
   const canApprove = actor?.permissions.includes("inventory:write") ?? false;
@@ -677,6 +739,13 @@ function App() {
   );
   const selectedFile = files.find((file) => file.id === selectedFileId);
   const unreadNotifications = notifications.filter((notification) => !notification.readAt);
+
+  useEffect(() => {
+    if (!token) return;
+    loadAiChatHistory();
+    loadKnowledgeDocs();
+    loadFaqTemplatesList();
+  }, [token]);
 
   useEffect(() => {
     if (!didMountToast.current) {
@@ -1219,6 +1288,183 @@ function App() {
     }
   }
 
+  async function sendAiMessage(event?: SyntheticEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    const message = aiMessage.trim();
+    if (!message || aiLoading) return;
+
+    setAiMessage("");
+    setAiError("");
+    const userMsg: ChatMessage = { role: "user", content: message };
+    setAiChatMessages((prev) => [...prev, userMsg]);
+    setAiLoading(true);
+
+    try {
+      const response = await fetch(`${apiBase}/ai/chat`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ message })
+      });
+      const payload = (await response.json()) as ChatResponse & { error?: string; detail?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "AI 请求失败");
+      }
+
+      const assistantMsg: ChatMessage = { role: "assistant", content: payload.reply };
+      setAiChatMessages((prev) => [...prev, assistantMsg]);
+      setAiSources(payload.sources ?? []);
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : "AI 服务连接失败";
+      setAiError(errMsg);
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  async function clearAiHistory() {
+    try {
+      await fetch(`${apiBase}/ai/chat-history`, {
+        method: "DELETE",
+        headers: headers()
+      });
+      setAiChatMessages([]);
+      setAiSources([]);
+      setAiError("");
+      setMessage("对话历史已清除。");
+    } catch {
+      setMessage("清除历史失败。");
+    }
+  }
+
+  async function loadAiChatHistory() {
+    try {
+      const response = await fetch(`${apiBase}/ai/chat-history`, {
+        headers: headers()
+      });
+      if (!response.ok) return;
+      const history = (await response.json()) as ChatHistoryRecord[];
+      setAiChatMessages(history.map((h) => ({ role: h.role, content: h.content })));
+    } catch {
+      // Best-effort background load
+    }
+  }
+
+  async function loadKnowledgeDocs() {
+    try {
+      const response = await fetch(`${apiBase}/ai/knowledge`, { headers: headers() });
+      if (!response.ok) return;
+      setKnowledgeDocs(await response.json());
+    } catch {
+      // Best-effort
+    }
+  }
+
+  async function loadFaqTemplatesList() {
+    try {
+      const response = await fetch(`${apiBase}/ai/templates`, { headers: headers() });
+      if (!response.ok) return;
+      setFaqTemplates(await response.json());
+    } catch {
+      // Best-effort
+    }
+  }
+
+  async function createKnowledgeDoc(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!knowledgeTitle.trim() || !knowledgeContent.trim()) return;
+    setAiLoading(true);
+    try {
+      const response = await fetch(`${apiBase}/ai/knowledge`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({
+          title: knowledgeTitle,
+          content: knowledgeContent,
+          category: knowledgeCategory,
+          tags: knowledgeTags.split(",").map((t) => t.trim()).filter(Boolean)
+        })
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "添加知识库失败");
+      setMessage(`已添加知识文档：${payload.title}`);
+      setKnowledgeTitle("");
+      setKnowledgeContent("");
+      setKnowledgeTags("");
+      await loadKnowledgeDocs();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "添加失败");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  async function updateKnowledgeDoc(id: string) {
+    if (!knowledgeTitle.trim() || !knowledgeContent.trim()) return;
+    setAiLoading(true);
+    try {
+      const response = await fetch(`${apiBase}/ai/knowledge/${id}`, {
+        method: "PUT",
+        headers: headers(),
+        body: JSON.stringify({
+          title: knowledgeTitle,
+          content: knowledgeContent,
+          category: knowledgeCategory,
+          tags: knowledgeTags.split(",").map((t) => t.trim()).filter(Boolean)
+        })
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "更新知识库失败");
+      setMessage(`已更新知识文档：${payload.title}`);
+      setEditingKnowledgeId("");
+      setKnowledgeTitle("");
+      setKnowledgeContent("");
+      setKnowledgeCategory("general");
+      setKnowledgeTags("");
+      await loadKnowledgeDocs();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "更新失败");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  async function deleteKnowledgeDoc(id: string) {
+    if (!window.confirm("确认删除该知识库文档？")) return;
+    try {
+      const response = await fetch(`${apiBase}/ai/knowledge/${id}`, {
+        method: "DELETE",
+        headers: headers()
+      });
+      if (!response.ok) {
+        const payload = await response.json();
+        throw new Error(payload.error ?? "删除失败");
+      }
+      setMessage("知识文档已删除。");
+      if (editingKnowledgeId === id) {
+        setEditingKnowledgeId("");
+        setKnowledgeTitle("");
+        setKnowledgeContent("");
+      }
+      await loadKnowledgeDocs();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "删除失败");
+    }
+  }
+
+  function startEditKnowledge(doc: KnowledgeDocument) {
+    setEditingKnowledgeId(doc.id);
+    setKnowledgeTitle(doc.title);
+    setKnowledgeContent(doc.content);
+    setKnowledgeCategory(doc.category);
+    setKnowledgeTags(doc.tags.join(", "));
+    setShowKnowledgePanel(true);
+  }
+
+  function useFaqTemplate(question: string) {
+    setAiMessage(question);
+    setAiActiveTab("chat");
+  }
+
   if (!actor) {
     return (
       <main className="login-shell">
@@ -1299,6 +1545,10 @@ function App() {
           <a href="#members">
             <Users size={18} />
             账户管理
+          </a>
+          <a href="#ai">
+            <Bot size={18} />
+            AI 助手
           </a>
         </nav>
 
@@ -2282,11 +2532,267 @@ function App() {
           ) : null}
         </section>
 
+        <section className="panel" id="ai">
+          <div className="panel-head">
+            <div>
+              <p className="eyebrow">AI Assistant</p>
+              <h2>AI 智能助手</h2>
+            </div>
+            <Bot size={20} />
+          </div>
+
+          <div className="subnav">
+            <button
+              type="button"
+              className={aiActiveTab === "chat" ? "selected" : ""}
+              onClick={() => setAiActiveTab("chat")}
+            >
+              <MessageCircle size={15} />
+              对话问答
+            </button>
+            <button
+              type="button"
+              className={aiActiveTab === "knowledge" ? "selected" : ""}
+              onClick={() => {
+                setAiActiveTab("knowledge");
+                loadKnowledgeDocs();
+              }}
+            >
+              <BookOpen size={15} />
+              知识库
+            </button>
+          </div>
+
+          {aiActiveTab === "chat" ? (
+            <div className="ai-chat-layout">
+              <div className="ai-chat-main">
+                <div className="ai-chat-messages">
+                  {aiChatMessages.length === 0 ? (
+                    <div className="ai-welcome">
+                      <Bot size={40} />
+                      <h3>你好！我是实验室智能助手</h3>
+                      <p>我可以帮助你解答实验流程、耗材申请、设备使用、安全规范等问题。请在下方输入你的问题。</p>
+                    </div>
+                  ) : (
+                    aiChatMessages.map((msg, idx) => (
+                      <div key={idx} className={`ai-message ${msg.role}`}>
+                        <div className="ai-message-avatar">
+                          {msg.role === "user" ? <Users size={16} /> : <Bot size={16} />}
+                        </div>
+                        <div className="ai-message-content">
+                          <span className="ai-message-role">
+                            {msg.role === "user" ? "你" : "AI 助手"}
+                          </span>
+                          <p>{msg.content}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  {aiLoading ? (
+                    <div className="ai-message assistant">
+                      <div className="ai-message-avatar"><Bot size={16} /></div>
+                      <div className="ai-message-content">
+                        <span className="ai-message-role">AI 助手</span>
+                        <p className="ai-typing">正在思考中...</p>
+                      </div>
+                    </div>
+                  ) : null}
+                  {aiError ? (
+                    <div className="ai-error-banner">
+                      <XCircle size={16} />
+                      <span>{aiError}</span>
+                    </div>
+                  ) : null}
+                </div>
+
+                {aiSources.length > 0 ? (
+                  <div className="ai-sources">
+                    <span>参考知识库文档：</span>
+                    {aiSources.map((src) => (
+                      <span key={src.id} className="ai-source-tag">{src.title}</span>
+                    ))}
+                  </div>
+                ) : null}
+
+                <form className="ai-chat-input" onSubmit={sendAiMessage}>
+                  <input
+                    placeholder="输入你的问题，例如：如何申请实验耗材？"
+                    value={aiMessage}
+                    onChange={(event) => setAiMessage(event.target.value)}
+                    disabled={aiLoading}
+                  />
+                  <button type="submit" className="primary" disabled={aiLoading || !aiMessage.trim()}>
+                    <Send size={16} />
+                  </button>
+                  {aiChatMessages.length > 0 ? (
+                    <button type="button" className="ghost" onClick={clearAiHistory} title="清除历史">
+                      <Trash2 size={16} />
+                    </button>
+                  ) : null}
+                </form>
+              </div>
+
+              <div className="ai-faq-sidebar">
+                <h4><HelpCircle size={15} /> 常见问题</h4>
+                {faqTemplates.map((tmpl) => (
+                  <button
+                    key={tmpl.id}
+                    type="button"
+                    className="faq-template-btn"
+                    onClick={() => useFaqTemplate(tmpl.question)}
+                  >
+                    {tmpl.question}
+                  </button>
+                ))}
+                {faqTemplates.length === 0 ? (
+                  <p className="ai-welcome">暂无问题模板，管理员可在知识库中添加。</p>
+                ) : null}
+              </div>
+            </div>
+          ) : (
+            <div className="ai-knowledge-layout">
+              <div className="ai-knowledge-toolbar">
+                <button
+                  type="button"
+                  className={!showKnowledgePanel ? "selected" : "ghost"}
+                  onClick={() => {
+                    setShowKnowledgePanel(false);
+                    setEditingKnowledgeId("");
+                    setKnowledgeTitle("");
+                    setKnowledgeContent("");
+                    setKnowledgeCategory("general");
+                    setKnowledgeTags("");
+                  }}
+                >
+                  文档列表
+                </button>
+                <button
+                  type="button"
+                  className={showKnowledgePanel ? "selected" : "ghost"}
+                  onClick={() => {
+                    setShowKnowledgePanel(true);
+                    if (editingKnowledgeId) {
+                      setEditingKnowledgeId("");
+                      setKnowledgeTitle("");
+                      setKnowledgeContent("");
+                      setKnowledgeCategory("general");
+                      setKnowledgeTags("");
+                    }
+                  }}
+                >
+                  <Plus size={15} />
+                  添加文档
+                </button>
+              </div>
+
+              {showKnowledgePanel ? (
+                <form className="knowledge-form" onSubmit={editingKnowledgeId ? (e) => { e.preventDefault(); void updateKnowledgeDoc(editingKnowledgeId); } : createKnowledgeDoc}>
+                  <h3>{editingKnowledgeId ? "编辑知识文档" : "添加知识文档"}</h3>
+                  <label>
+                    标题
+                    <input
+                      value={knowledgeTitle}
+                      onChange={(event) => setKnowledgeTitle(event.target.value)}
+                      placeholder="文档标题"
+                    />
+                  </label>
+                  <label>
+                    分类
+                    <select
+                      value={knowledgeCategory}
+                      onChange={(event) => setKnowledgeCategory(event.target.value)}
+                    >
+                      <option value="general">通用</option>
+                      <option value="rules">规章制度</option>
+                      <option value="sop">操作流程</option>
+                      <option value="safety">安全规范</option>
+                      <option value="equipment">设备使用</option>
+                      <option value="faq">常见问题</option>
+                    </select>
+                  </label>
+                  <label>
+                    标签
+                    <input
+                      value={knowledgeTags}
+                      onChange={(event) => setKnowledgeTags(event.target.value)}
+                      placeholder="多个标签用逗号分隔"
+                    />
+                  </label>
+                  <label>
+                    内容
+                    <textarea
+                      value={knowledgeContent}
+                      onChange={(event) => setKnowledgeContent(event.target.value)}
+                      placeholder="知识文档内容，AI 将基于此回答问题..."
+                      rows={12}
+                    />
+                  </label>
+                  <div className="row-actions">
+                    <button className="primary" type="submit" disabled={aiLoading}>
+                      {aiLoading ? "保存中..." : editingKnowledgeId ? "更新文档" : "添加文档"}
+                    </button>
+                    {editingKnowledgeId ? (
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() => {
+                          setEditingKnowledgeId("");
+                          setKnowledgeTitle("");
+                          setKnowledgeContent("");
+                          setKnowledgeCategory("general");
+                          setKnowledgeTags("");
+                          setShowKnowledgePanel(false);
+                        }}
+                      >
+                        取消编辑
+                      </button>
+                    ) : null}
+                  </div>
+                </form>
+              ) : (
+                <div className="knowledge-list">
+                  {knowledgeDocs.length === 0 ? (
+                    <div className="ai-welcome">
+                      <BookOpen size={32} />
+                      <h3>知识库为空</h3>
+                      <p>点击"添加文档"上传实验室规章制度、操作流程、常见问题等，AI 将基于这些知识回答问题。</p>
+                    </div>
+                  ) : (
+                    knowledgeDocs.map((doc) => (
+                      <article className="knowledge-card" key={doc.id}>
+                        <div className="knowledge-card-header">
+                          <div>
+                            <strong>{doc.title}</strong>
+                            <span className="knowledge-category">{doc.category}</span>
+                          </div>
+                          <div className="row-actions">
+                            <button type="button" onClick={() => startEditKnowledge(doc)}>
+                              编辑
+                            </button>
+                            <button type="button" onClick={() => deleteKnowledgeDoc(doc.id)}>
+                              删除
+                            </button>
+                          </div>
+                        </div>
+                        <p>{doc.content.slice(0, 200)}{doc.content.length > 200 ? "..." : ""}</p>
+                        <small>
+                          {doc.tags.join(" / ") || "无标签"} · 更新于{" "}
+                          {new Date(doc.updatedAt).toLocaleString()}
+                        </small>
+                      </article>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+
         <section className="module-strip">
           <ModuleCard title="项目任务" text="项目、任务、看板入口已预留。" />
+          <ModuleCard title="AI 智能问答" text="基于 LLM + RAG，支持知识库问答和对话。" />
           <ModuleCard title="文件资料" text="支持文件夹、权限、标签、小文件直传和版本记录。" />
           <ModuleCard title="会议通知" text="支持会议预约、站内通知和全局公告。" />
-          <ModuleCard title="统一认证" text="ids.xmu.edu.cn 适配器后续接入。" />
         </section>
 
         {selectedNotification ? (

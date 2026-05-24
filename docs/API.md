@@ -389,3 +389,69 @@ GET /events?token=<token>
 ```
 
 当前用于申请提交、审批变化后的页面自动刷新。
+
+## 8. AI 智能问答
+
+与 AI 对话：
+
+```http
+POST /ai/chat
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "message": "如何申请实验耗材？"
+}
+```
+
+返回：
+```json
+{
+  "reply": "申请实验耗材的流程如下...",
+  "sources": [
+    { "id": "k-001", "title": "耗材申请流程", "snippet": "..." }
+  ]
+}
+```
+
+获取对话历史：
+```http
+GET /ai/chat-history
+Authorization: Bearer <token>
+```
+
+清除对话历史：
+```http
+DELETE /ai/chat-history
+Authorization: Bearer <token>
+```
+
+知识库管理：
+```http
+GET /ai/knowledge                          # 查询知识库
+POST /ai/knowledge                         # 添加知识文档
+PUT /ai/knowledge/:id                      # 更新知识文档
+DELETE /ai/knowledge/:id                   # 删除知识文档
+```
+
+添加知识文档示例：
+```http
+POST /ai/knowledge
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "title": "耗材申请流程",
+  "content": "1. 登录平台 2. 进入耗材设备页面 3. 选择耗材...",
+  "category": "sop",
+  "tags": ["耗材", "流程"]
+}
+```
+
+FAQ 模板：
+```http
+GET /ai/templates
+Authorization: Bearer <token>
+```
+
+AI 接入配置详见 [docs/AI_MODULE.md](./AI_MODULE.md)。

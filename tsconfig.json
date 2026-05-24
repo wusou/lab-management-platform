@@ -6,6 +6,7 @@
     { "path": "plugins/collaboration" },
     { "path": "plugins/files" },
     { "path": "plugins/hello-world" },
+    { "path": "plugins/ai" },
     { "path": "plugins/inventory" },
     { "path": "apps/api" },
     { "path": "apps/web" }

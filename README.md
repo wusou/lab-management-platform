@@ -144,7 +144,29 @@ git pull
 
 如果你的上级目录叫 `managenment-platform` 或其他名字也没关系，只要进入项目根目录，也就是包含 `docker-compose.yml`、`package.json`、`apps`、`plugins` 的目录。
 
-### 6. 启动项目
+### 6. 配置环境变量
+
+项目不包含 `.env` 文件（已 gitignore），首次使用需从模板创建：
+
+```powershell
+copy .env.example .env
+```
+
+开发环境开箱即用，无需修改即可启动。如需启用 AI 功能，编辑 `.env` 填入 API Key：
+
+```bash
+# 使用 DeepSeek（推荐，中文效果好）
+AI_PROVIDER=openai
+OPENAI_BASE_URL=https://api.deepseek.com
+OPENAI_API_KEY=sk-your-api-key
+OPENAI_MODEL=deepseek-v4-flash
+```
+
+详细配置见 [docs/AI_MODULE.md](./docs/AI_MODULE.md)。
+
+> `.env` 包含密钥等敏感信息，**禁止提交到 git**。`.env.example` 是模板，不含真实密钥，可以提交。
+
+### 7. 启动项目
 
 首次启动或依赖变化后：
 
@@ -181,7 +203,7 @@ postgres  healthy
 
 这两个账号只在 `NODE_ENV=development` 且 `LAB_SEED_DEMO_ACCOUNTS` 未设置为 `false` 时自动初始化，方便本地演示和测试。登录页不会展示或自动填充默认账号；生产环境应设置 `LAB_SEED_DEMO_ACCOUNTS=false`，并通过初始化管理员、统一认证或管理员后台创建正式账号。
 
-### 7. 更新代码后的启动方式
+### 8. 更新代码后的启动方式
 
 如果只是普通代码更新：
 
@@ -202,7 +224,7 @@ docker compose up --build -d -V api web
 docker compose exec api pnpm --filter @lab/api db:migrate
 ```
 
-### 8. 常见问题
+### 9. 常见问题
 
 `docker` 命令找不到：
 

@@ -405,28 +405,30 @@ Content-Type: application/json
 ```
 
 返回：
+
 ```json
 {
   "reply": "申请实验耗材的流程如下...",
-  "sources": [
-    { "id": "k-001", "title": "耗材申请流程", "snippet": "..." }
-  ]
+  "sources": [{ "id": "k-001", "title": "耗材申请流程", "snippet": "..." }]
 }
 ```
 
 获取对话历史：
+
 ```http
 GET /ai/chat-history
 Authorization: Bearer <token>
 ```
 
 清除对话历史：
+
 ```http
 DELETE /ai/chat-history
 Authorization: Bearer <token>
 ```
 
 知识库管理：
+
 ```http
 GET /ai/knowledge                          # 查询知识库
 POST /ai/knowledge                         # 添加知识文档
@@ -435,6 +437,7 @@ DELETE /ai/knowledge/:id                   # 删除知识文档
 ```
 
 添加知识文档示例：
+
 ```http
 POST /ai/knowledge
 Authorization: Bearer <token>
@@ -449,6 +452,7 @@ Content-Type: application/json
 ```
 
 FAQ 模板：
+
 ```http
 GET /ai/templates
 Authorization: Bearer <token>

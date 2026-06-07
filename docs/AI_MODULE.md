@@ -26,6 +26,7 @@ AI 模块采用**可插拔的 AI 提供商架构**，支持两种接入方式，
 [Ollama](https://ollama.com/) 是一个开源的大模型本地运行工具，无需付费 API Key，数据完全本地处理。
 
 **优点：**
+
 - 完全免费，无 API 调用费用
 - 数据不出服务器，适合实验室敏感场景
 - 支持多种开源模型（Qwen、Llama、DeepSeek 等）
@@ -34,6 +35,7 @@ AI 模块采用**可插拔的 AI 提供商架构**，支持两种接入方式，
 **部署步骤：**
 
 1. 在服务器上安装 Ollama：
+
    ```bash
    # Linux
    curl -fsSL https://ollama.com/install.sh | sh
@@ -42,6 +44,7 @@ AI 模块采用**可插拔的 AI 提供商架构**，支持两种接入方式，
    ```
 
 2. 拉取推荐模型（推荐 Qwen2.5，中文效果好）：
+
    ```bash
    ollama pull qwen2.5:7b          # 7B 参数，推荐配置
    ollama pull qwen2.5:3b          # 3B 参数，轻量替代
@@ -50,6 +53,7 @@ AI 模块采用**可插拔的 AI 提供商架构**，支持两种接入方式，
    ```
 
 3. 验证模型可用：
+
    ```bash
    ollama run qwen2.5:7b "你好，请介绍一下自己"
    ```
@@ -63,19 +67,20 @@ AI 模块采用**可插拔的 AI 提供商架构**，支持两种接入方式，
 
 **推荐模型说明：**
 
-| 模型 | 参数量 | 显存需求 | 中文效果 | 适用场景 |
-|------|--------|----------|----------|----------|
-| `qwen2.5:3b` | 3B | ~3GB | ★★★★ | 轻量、快速响应 |
-| `qwen2.5:7b` | 7B | ~6GB | ★★★★★ | 推荐，平衡效果与性能 |
-| `qwen2.5:14b` | 14B | ~10GB | ★★★★★ | 最佳效果，需较好显卡 |
-| `deepseek-r1:8b` | 8B | ~6GB | ★★★★ | 深度推理 |
-| `llama3.1:8b` | 8B | ~6GB | ★★★ | 英文为主 |
+| 模型             | 参数量 | 显存需求 | 中文效果 | 适用场景             |
+| ---------------- | ------ | -------- | -------- | -------------------- |
+| `qwen2.5:3b`     | 3B     | ~3GB     | ★★★★     | 轻量、快速响应       |
+| `qwen2.5:7b`     | 7B     | ~6GB     | ★★★★★    | 推荐，平衡效果与性能 |
+| `qwen2.5:14b`    | 14B    | ~10GB    | ★★★★★    | 最佳效果，需较好显卡 |
+| `deepseek-r1:8b` | 8B     | ~6GB     | ★★★★     | 深度推理             |
+| `llama3.1:8b`    | 8B     | ~6GB     | ★★★      | 英文为主             |
 
 ### 方式二：OpenAI 兼容 API
 
 使用 OpenAI 官方 API 或任何兼容 OpenAI 接口的服务（如 Azure OpenAI、DeepSeek API、通义千问 API 等）。
 
 **优点：**
+
 - 无需本地 GPU
 - 模型能力更强
 - 响应速度更快
@@ -89,6 +94,7 @@ AI 模块采用**可插拔的 AI 提供商架构**，支持两种接入方式，
    - 或其他兼容 OpenAI 接口的服务商
 
 2. 配置环境变量（.env）：
+
    ```bash
    # 使用 OpenAI 官方
    AI_PROVIDER=openai
@@ -111,18 +117,19 @@ AI 模块采用**可插拔的 AI 提供商架构**，支持两种接入方式，
 
 **DeepSeek 模型说明（官方文档：https://api-docs.deepseek.com ）：**
 
-| 模型名 | 状态 | 说明 |
-|--------|------|------|
-| `deepseek-v4-pro` | ✅ 推荐 | 最新旗舰模型，最强效果 |
-| `deepseek-v4-flash` | ✅ 推荐 | 最新轻量模型，速度快性价比高 |
-| `deepseek-chat` | ⚠️ 将弃用 | 已映射为 `deepseek-v4-flash` 非思考模式 |
-| `deepseek-reasoner` | ⚠️ 将弃用 | 已映射为 `deepseek-v4-flash` 思考模式 |
+| 模型名              | 状态      | 说明                                    |
+| ------------------- | --------- | --------------------------------------- |
+| `deepseek-v4-pro`   | ✅ 推荐   | 最新旗舰模型，最强效果                  |
+| `deepseek-v4-flash` | ✅ 推荐   | 最新轻量模型，速度快性价比高            |
+| `deepseek-chat`     | ⚠️ 将弃用 | 已映射为 `deepseek-v4-flash` 非思考模式 |
+| `deepseek-reasoner` | ⚠️ 将弃用 | 已映射为 `deepseek-v4-flash` 思考模式   |
 
 > **注意**：`deepseek-chat` 和 `deepseek-reasoner` 将于 **2026年7月24日** 停用，请直接使用 `deepseek-v4-pro` 或 `deepseek-v4-flash`。
 
 **思考模式（Reasoning / Thinking）：**
 
 `deepseek-v4-pro` 和 `deepseek-v4-flash` 支持思考模式，通过 `reasoning_effort` 参数控制推理深度：
+
 - `"reasoning_effort": "high"` — 深度推理，适合复杂数学、逻辑问题
 - `"thinking": {"type": "enabled"}` — 开启思考链输出
 
@@ -157,14 +164,14 @@ curl https://api.deepseek.com/chat/completions \
 
 ## 环境变量完整清单
 
-| 变量名 | 默认值 | 说明 |
-|--------|--------|------|
-| `AI_PROVIDER` | `ollama` | AI 提供商：`ollama` 或 `openai` |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama 服务地址 |
-| `OLLAMA_MODEL` | `qwen2.5:7b` | Ollama 模型名称 |
-| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI 兼容 API 地址 |
-| `OPENAI_API_KEY` | - | API Key |
-| `OPENAI_MODEL` | `gpt-4o-mini` | 模型名称 |
+| 变量名            | 默认值                      | 说明                            |
+| ----------------- | --------------------------- | ------------------------------- |
+| `AI_PROVIDER`     | `ollama`                    | AI 提供商：`ollama` 或 `openai` |
+| `OLLAMA_BASE_URL` | `http://localhost:11434`    | Ollama 服务地址                 |
+| `OLLAMA_MODEL`    | `qwen2.5:7b`                | Ollama 模型名称                 |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI 兼容 API 地址            |
+| `OPENAI_API_KEY`  | -                           | API Key                         |
+| `OPENAI_MODEL`    | `gpt-4o-mini`               | 模型名称                        |
 
 ## 知识库管理
 
@@ -175,6 +182,7 @@ curl https://api.deepseek.com/chat/completions \
 3. **检索机制**：用户提问时自动搜索知识库中相关文档，将匹配内容作为上下文注入 prompt
 
 **建议录入的知识内容：**
+
 - 实验室规章制度
 - 设备使用 SOP
 - 安全操作规范
@@ -199,12 +207,11 @@ Content-Type: application/json
 ```
 
 返回：
+
 ```json
 {
   "reply": "申请实验耗材的流程如下：1. 登录平台...",
-  "sources": [
-    { "id": "k-001", "title": "耗材申请流程", "snippet": "耗材申请需填写..." }
-  ]
+  "sources": [{ "id": "k-001", "title": "耗材申请流程", "snippet": "耗材申请需填写..." }]
 }
 ```
 
@@ -242,7 +249,7 @@ Content-Type: application/json
 services:
   api:
     environment:
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434  # Windows/Mac
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434 # Windows/Mac
       # - OLLAMA_BASE_URL=http://172.17.0.1:11434          # Linux
 ```
 

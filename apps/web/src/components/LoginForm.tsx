@@ -11,7 +11,15 @@ interface LoginFormProps {
   onSubmit: (e: SyntheticEvent<HTMLFormElement>) => void;
 }
 
-export function LoginForm({ username, setUsername, password, setPassword, loading, message, onSubmit }: LoginFormProps) {
+export function LoginForm({
+  username,
+  setUsername,
+  password,
+  setPassword,
+  loading,
+  message,
+  onSubmit
+}: LoginFormProps) {
   return (
     <main className="login-shell">
       <form className="login-panel" onSubmit={onSubmit} autoComplete="off">

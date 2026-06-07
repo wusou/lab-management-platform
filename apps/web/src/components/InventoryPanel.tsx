@@ -1,5 +1,13 @@
 import type { SyntheticEvent } from "react";
-import { CheckCircle2, ClipboardList, Database, PackageCheck, Send, ShieldCheck, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  ClipboardList,
+  Database,
+  PackageCheck,
+  Send,
+  ShieldCheck,
+  XCircle
+} from "lucide-react";
 import { Metric } from "./Shared";
 import { statusText, applicationPreviewLimit } from "../utils/helpers";
 import type { InventoryApplication, Material, StockMovement, Summary } from "../types";
@@ -35,14 +43,33 @@ interface InventoryPanelProps {
 }
 
 export function InventoryPanel({
-  summary, materials, selectedMaterialId, setSelectedMaterialId, selectedMaterial,
-  quantity, setQuantity, reason, setReason, loading, canApprove,
-  stockInQuantity, setStockInQuantity,
-  displayedApplications, pendingApplications, visibleApplications,
-  hasMoreApplications, showAllApplications, setShowAllApplications,
-  filteredStockMovements, movementMaterialFilter, setMovementMaterialFilter,
-  movementTypeFilter, setMovementTypeFilter,
-  onSubmitApplication, onStockIn, onReviewApplication
+  summary,
+  materials,
+  selectedMaterialId,
+  setSelectedMaterialId,
+  selectedMaterial,
+  quantity,
+  setQuantity,
+  reason,
+  setReason,
+  loading,
+  canApprove,
+  stockInQuantity,
+  setStockInQuantity,
+  displayedApplications,
+  pendingApplications,
+  visibleApplications,
+  hasMoreApplications,
+  showAllApplications,
+  setShowAllApplications,
+  filteredStockMovements,
+  movementMaterialFilter,
+  setMovementMaterialFilter,
+  movementTypeFilter,
+  setMovementTypeFilter,
+  onSubmitApplication,
+  onStockIn,
+  onReviewApplication
 }: InventoryPanelProps) {
   return (
     <>

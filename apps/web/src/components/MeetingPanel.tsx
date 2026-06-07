@@ -10,15 +10,24 @@ interface MeetingPanelProps {
   unreadNotifications: NotificationItem[];
   canManageMeetings: boolean;
   loading: boolean;
-  meetingTitle: string; setMeetingTitle: (v: string) => void;
-  meetingStartsAt: string; setMeetingStartsAt: (v: string) => void;
-  meetingEndsAt: string; setMeetingEndsAt: (v: string) => void;
-  meetingLocation: string; setMeetingLocation: (v: string) => void;
-  meetingOnlineUrl: string; setMeetingOnlineUrl: (v: string) => void;
-  meetingParticipants: string; setMeetingParticipants: (v: string) => void;
-  meetingSummary: string; setMeetingSummary: (v: string) => void;
-  announcementTitle: string; setAnnouncementTitle: (v: string) => void;
-  announcementContent: string; setAnnouncementContent: (v: string) => void;
+  meetingTitle: string;
+  setMeetingTitle: (v: string) => void;
+  meetingStartsAt: string;
+  setMeetingStartsAt: (v: string) => void;
+  meetingEndsAt: string;
+  setMeetingEndsAt: (v: string) => void;
+  meetingLocation: string;
+  setMeetingLocation: (v: string) => void;
+  meetingOnlineUrl: string;
+  setMeetingOnlineUrl: (v: string) => void;
+  meetingParticipants: string;
+  setMeetingParticipants: (v: string) => void;
+  meetingSummary: string;
+  setMeetingSummary: (v: string) => void;
+  announcementTitle: string;
+  setAnnouncementTitle: (v: string) => void;
+  announcementContent: string;
+  setAnnouncementContent: (v: string) => void;
   onCreateMeeting: (e: SyntheticEvent<HTMLFormElement>) => void;
   onCompleteMeeting: (meeting: Meeting) => void;
   onPublishAnnouncement: (e: SyntheticEvent<HTMLFormElement>) => void;
@@ -26,14 +35,34 @@ interface MeetingPanelProps {
 }
 
 export function MeetingPanel({
-  meetings, notifications, setSelectedNotification,
-  unreadNotifications, canManageMeetings, loading,
-  meetingTitle, setMeetingTitle, meetingStartsAt, setMeetingStartsAt,
-  meetingEndsAt, setMeetingEndsAt, meetingLocation, setMeetingLocation,
-  meetingOnlineUrl, setMeetingOnlineUrl, meetingParticipants, setMeetingParticipants,
-  meetingSummary, setMeetingSummary, announcementTitle, setAnnouncementTitle,
-  announcementContent, setAnnouncementContent,
-  onCreateMeeting, onCompleteMeeting, onPublishAnnouncement, onMarkNotificationRead,
+  meetings,
+  notifications,
+  setSelectedNotification,
+  unreadNotifications,
+  canManageMeetings,
+  loading,
+  meetingTitle,
+  setMeetingTitle,
+  meetingStartsAt,
+  setMeetingStartsAt,
+  meetingEndsAt,
+  setMeetingEndsAt,
+  meetingLocation,
+  setMeetingLocation,
+  meetingOnlineUrl,
+  setMeetingOnlineUrl,
+  meetingParticipants,
+  setMeetingParticipants,
+  meetingSummary,
+  setMeetingSummary,
+  announcementTitle,
+  setAnnouncementTitle,
+  announcementContent,
+  setAnnouncementContent,
+  onCreateMeeting,
+  onCompleteMeeting,
+  onPublishAnnouncement,
+  onMarkNotificationRead
 }: MeetingPanelProps) {
   return (
     <section className="panel" id="meetings">
@@ -126,21 +155,81 @@ export function MeetingPanel({
           <div className="meeting-actions">
             <form className="meeting-form" onSubmit={onCreateMeeting}>
               <h3>创建会议</h3>
-              <label>主题<input value={meetingTitle} onChange={(e) => setMeetingTitle(e.target.value)} /></label>
-              <label>开始时间<input type="datetime-local" value={meetingStartsAt} onChange={(e) => setMeetingStartsAt(e.target.value)} /></label>
-              <label>结束时间<input type="datetime-local" value={meetingEndsAt} onChange={(e) => setMeetingEndsAt(e.target.value)} /></label>
-              <label>地点<input value={meetingLocation} onChange={(e) => setMeetingLocation(e.target.value)} /></label>
-              <label>腾讯会议/线上链接<input value={meetingOnlineUrl} onChange={(e) => setMeetingOnlineUrl(e.target.value)} /></label>
-              <label>参会人 ID<input placeholder="多个用户 ID 用英文逗号分隔" value={meetingParticipants} onChange={(e) => setMeetingParticipants(e.target.value)} /></label>
-              <label>议程说明<textarea value={meetingSummary} onChange={(e) => setMeetingSummary(e.target.value)} /></label>
-              <button className="primary" disabled={loading}><CalendarClock size={16} />{loading ? "创建中..." : "创建会议"}</button>
+              <label>
+                主题
+                <input value={meetingTitle} onChange={(e) => setMeetingTitle(e.target.value)} />
+              </label>
+              <label>
+                开始时间
+                <input
+                  type="datetime-local"
+                  value={meetingStartsAt}
+                  onChange={(e) => setMeetingStartsAt(e.target.value)}
+                />
+              </label>
+              <label>
+                结束时间
+                <input
+                  type="datetime-local"
+                  value={meetingEndsAt}
+                  onChange={(e) => setMeetingEndsAt(e.target.value)}
+                />
+              </label>
+              <label>
+                地点
+                <input
+                  value={meetingLocation}
+                  onChange={(e) => setMeetingLocation(e.target.value)}
+                />
+              </label>
+              <label>
+                腾讯会议/线上链接
+                <input
+                  value={meetingOnlineUrl}
+                  onChange={(e) => setMeetingOnlineUrl(e.target.value)}
+                />
+              </label>
+              <label>
+                参会人 ID
+                <input
+                  placeholder="多个用户 ID 用英文逗号分隔"
+                  value={meetingParticipants}
+                  onChange={(e) => setMeetingParticipants(e.target.value)}
+                />
+              </label>
+              <label>
+                议程说明
+                <textarea
+                  value={meetingSummary}
+                  onChange={(e) => setMeetingSummary(e.target.value)}
+                />
+              </label>
+              <button className="primary" disabled={loading}>
+                <CalendarClock size={16} />
+                {loading ? "创建中..." : "创建会议"}
+              </button>
             </form>
 
             <form className="meeting-form" onSubmit={onPublishAnnouncement}>
               <h3>发布公告</h3>
-              <label>标题<input value={announcementTitle} onChange={(e) => setAnnouncementTitle(e.target.value)} /></label>
-              <label>内容<textarea value={announcementContent} onChange={(e) => setAnnouncementContent(e.target.value)} /></label>
-              <button className="primary" disabled={loading}><Megaphone size={16} />{loading ? "发布中..." : "发布公告"}</button>
+              <label>
+                标题
+                <input
+                  value={announcementTitle}
+                  onChange={(e) => setAnnouncementTitle(e.target.value)}
+                />
+              </label>
+              <label>
+                内容
+                <textarea
+                  value={announcementContent}
+                  onChange={(e) => setAnnouncementContent(e.target.value)}
+                />
+              </label>
+              <button className="primary" disabled={loading}>
+                <Megaphone size={16} />
+                {loading ? "发布中..." : "发布公告"}
+              </button>
             </form>
           </div>
         ) : null}

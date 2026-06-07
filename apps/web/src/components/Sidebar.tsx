@@ -1,4 +1,14 @@
-import { Bot, Boxes, CalendarClock, ClipboardList, FileText, FlaskConical, LayoutDashboard, PackageCheck, Users } from "lucide-react";
+import {
+  Bot,
+  Boxes,
+  CalendarClock,
+  ClipboardList,
+  FileText,
+  FlaskConical,
+  LayoutDashboard,
+  PackageCheck,
+  Users
+} from "lucide-react";
 import { roleText } from "../utils/helpers";
 import type { Actor } from "../types";
 

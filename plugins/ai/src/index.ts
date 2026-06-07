@@ -80,14 +80,6 @@ interface FaqTemplate {
   sortOrder: number;
 }
 
-interface EmbeddingVector {
-  id: string;
-  docId: string;
-  chunkIndex: number;
-  chunkText: string;
-  embedding: number[];
-}
-
 // ── AI Provider Interface ──────────────────────────────
 
 interface ChatProvider {
@@ -151,7 +143,11 @@ class OllamaChatProvider implements ChatProvider {
     }
 
     const data = (await response.json()) as {
-      message?: { content?: string; reasoning_content?: string; tool_calls?: Array<{ function: { name: string; arguments: Record<string, unknown> } }> };
+      message?: {
+        content?: string;
+        reasoning_content?: string;
+        tool_calls?: Array<{ function: { name: string; arguments: Record<string, unknown> } }>;
+      };
     };
     const content = data.message?.content ?? null;
     const reasoningContent = data.message?.reasoning_content;
@@ -183,7 +179,11 @@ class OpenAICompatibleChatProvider implements ChatProvider {
     // Clean messages for API compatibility
     const cleanMessages = messages.map((m) => {
       if (m.role === "assistant" && m.tool_calls?.length) {
-        const msg: Record<string, unknown> = { role: m.role, content: null, tool_calls: m.tool_calls };
+        const msg: Record<string, unknown> = {
+          role: m.role,
+          content: null,
+          tool_calls: m.tool_calls
+        };
         if (m.reasoning_content) msg.reasoning_content = m.reasoning_content;
         return msg;
       }
@@ -221,11 +221,13 @@ class OpenAICompatibleChatProvider implements ChatProvider {
     }
 
     const data = (await response.json()) as {
-      choices?: { message?: {
-        content?: string;
-        reasoning_content?: string;
-        tool_calls?: Array<{ id: string; function: { name: string; arguments: string } }>;
-      } }[];
+      choices?: {
+        message?: {
+          content?: string;
+          reasoning_content?: string;
+          tool_calls?: Array<{ id: string; function: { name: string; arguments: string } }>;
+        };
+      }[];
     };
     const msg = data.choices?.[0]?.message;
     const content = msg?.content ?? null;
@@ -333,7 +335,11 @@ class NoopEmbeddingProvider implements EmbeddingProvider {
 }
 
 function createEmbeddingProvider(): EmbeddingProvider {
-  const provider = (process.env.EMBEDDING_PROVIDER ?? process.env.AI_PROVIDER ?? "noop").toLowerCase();
+  const provider = (
+    process.env.EMBEDDING_PROVIDER ??
+    process.env.AI_PROVIDER ??
+    "noop"
+  ).toLowerCase();
 
   if (provider === "openai") {
     return new OpenAIEmbeddingProvider(
@@ -358,7 +364,9 @@ interface KnowledgeRepository {
   search(query: string, limit?: number): Promise<KnowledgeSource[]>;
   listAll(): Promise<KnowledgeDocument[]>;
   create(input: KnowledgeCreateRequest & { createdBy: string }): Promise<KnowledgeDocument>;
-  createWithEmbedding(input: KnowledgeCreateRequest & { createdBy: string }): Promise<KnowledgeDocument>;
+  createWithEmbedding(
+    input: KnowledgeCreateRequest & { createdBy: string }
+  ): Promise<KnowledgeDocument>;
   update(
     id: string,
     input: KnowledgeUpdateRequest
@@ -431,9 +439,7 @@ class PostgresKnowledgeRepository implements KnowledgeRepository {
     try {
       await this.pool.query("CREATE EXTENSION IF NOT EXISTS vector");
       // Verify the extension is usable
-      const r = await this.pool.query(
-        "SELECT 1 FROM pg_extension WHERE extname = 'vector'"
-      );
+      const r = await this.pool.query("SELECT 1 FROM pg_extension WHERE extname = 'vector'");
       hasVector = r.rows.length > 0;
     } catch {
       hasVector = false;
@@ -515,7 +521,11 @@ class PostgresKnowledgeRepository implements KnowledgeRepository {
       if (queryVec && queryVec.some((v) => v !== 0)) {
         const vecStr = `[${queryVec.join(",")}]`;
         const result = await this.pool.query<{
-          id: string; title: string; content: string; chunk_text: string; distance: number;
+          id: string;
+          title: string;
+          content: string;
+          chunk_text: string;
+          distance: number;
         }>(
           `SELECT d.id, d.title, d.content, e.chunk_text,
                   e.embedding <=> $1::vector AS distance
@@ -530,7 +540,8 @@ class PostgresKnowledgeRepository implements KnowledgeRepository {
             id: row.id,
             title: row.title,
             content: row.content,
-            snippet: (row.chunk_text ?? row.content).slice(0, 300) +
+            snippet:
+              (row.chunk_text ?? row.content).slice(0, 300) +
               ((row.chunk_text ?? row.content).length > 300 ? "..." : ""),
             score: 1 - (row.distance ?? 0)
           }));
@@ -570,15 +581,20 @@ class PostgresKnowledgeRepository implements KnowledgeRepository {
     return result.rows.map(mapKnowledgeRow);
   }
 
-  async create(
-    input: KnowledgeCreateRequest & { createdBy: string }
-  ): Promise<KnowledgeDocument> {
+  async create(input: KnowledgeCreateRequest & { createdBy: string }): Promise<KnowledgeDocument> {
     const id = randomUUID();
     const result = await this.pool.query(
       `INSERT INTO ai.knowledge_document (id, title, content, category, tags, created_by)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [id, input.title, input.content, input.category ?? "general", input.tags ?? [], input.createdBy]
+      [
+        id,
+        input.title,
+        input.content,
+        input.category ?? "general",
+        input.tags ?? [],
+        input.createdBy
+      ]
     );
     return mapKnowledgeRow(result.rows[0]);
   }
@@ -587,10 +603,9 @@ class PostgresKnowledgeRepository implements KnowledgeRepository {
     id: string,
     input: KnowledgeUpdateRequest
   ): Promise<KnowledgeDocument | { error: string; status: number }> {
-    const existing = await this.pool.query(
-      "SELECT * FROM ai.knowledge_document WHERE id = $1",
-      [id]
-    );
+    const existing = await this.pool.query("SELECT * FROM ai.knowledge_document WHERE id = $1", [
+      id
+    ]);
     if (!existing.rows[0]) {
       return { error: "Knowledge document not found", status: 404 };
     }
@@ -613,10 +628,7 @@ class PostgresKnowledgeRepository implements KnowledgeRepository {
   async delete(id: string): Promise<{ error?: string; status?: number }> {
     // Delete embeddings first
     await this.pool.query("DELETE FROM ai.knowledge_embedding WHERE doc_id = $1", [id]);
-    const result = await this.pool.query(
-      "DELETE FROM ai.knowledge_document WHERE id = $1",
-      [id]
-    );
+    const result = await this.pool.query("DELETE FROM ai.knowledge_document WHERE id = $1", [id]);
     if (result.rowCount === 0) {
       return { error: "Knowledge document not found", status: 404 };
     }
@@ -732,9 +744,7 @@ class PostgresChatHistoryRepository implements ChatHistoryRepository {
        LIMIT $2`,
       [userId, limit]
     );
-    return result.rows
-      .map(mapChatHistoryRow)
-      .reverse(); // Return in chronological order
+    return result.rows.map(mapChatHistoryRow).reverse(); // Return in chronological order
   }
 
   async addMessage(
@@ -769,9 +779,7 @@ class PostgresFaqTemplateRepository implements FaqTemplateRepository {
   }
 
   async listAll(): Promise<FaqTemplate[]> {
-    const result = await this.pool.query(
-      "SELECT * FROM ai.faq_template ORDER BY sort_order"
-    );
+    const result = await this.pool.query("SELECT * FROM ai.faq_template ORDER BY sort_order");
     return result.rows.map((row) => ({
       id: String(row.id),
       question: String(row.question),
@@ -783,7 +791,9 @@ class PostgresFaqTemplateRepository implements FaqTemplateRepository {
 
 // ── Row Mappers ────────────────────────────────────────
 
-function mapKnowledgeRow(row: Record<string, unknown> | { [key: string]: unknown }): KnowledgeDocument {
+function mapKnowledgeRow(
+  row: Record<string, unknown> | { [key: string]: unknown }
+): KnowledgeDocument {
   return {
     id: String(row.id),
     title: String(row.title),
@@ -915,11 +925,7 @@ const AGENT_TOOLS: ToolDefinition[] = [
   }
 ];
 
-async function executeTool(
-  toolCall: ToolCall,
-  pool: pg.Pool,
-  actorId: string
-): Promise<string> {
+async function executeTool(toolCall: ToolCall, pool: pg.Pool, actorId: string): Promise<string> {
   const args = toolCall.arguments;
   const client = await pool.connect();
   try {
@@ -930,10 +936,11 @@ async function executeTool(
         );
         if (!r.rows.length) return "当前库存中没有耗材记录。";
         return r.rows
-          .map((row) =>
-            `${row.name}（${row.spec}）：库存 ${row.stock}${row.unit}，` +
-            `${row.stock <= row.warn_stock ? "⚠️ 低于预警值 " + row.warn_stock + "，" : ""}` +
-            `存放于 ${row.location}`
+          .map(
+            (row) =>
+              `${row.name}（${row.spec}）：库存 ${row.stock}${row.unit}，` +
+              `${row.stock <= row.warn_stock ? "⚠️ 低于预警值 " + row.warn_stock + "，" : ""}` +
+              `存放于 ${row.location}`
           )
           .join("\n");
       }
@@ -941,13 +948,14 @@ async function executeTool(
       case "get_pending_applications": {
         const r = await client.query(
           "SELECT applicant_name, material_name, quantity, reason, status, created_at " +
-          "FROM inventory.application WHERE status = 'pending' ORDER BY created_at DESC"
+            "FROM inventory.application WHERE status = 'pending' ORDER BY created_at DESC"
         );
         if (!r.rows.length) return "当前没有待审批的申请。";
         return r.rows
-          .map((row) =>
-            `${row.applicant_name} 申请 ${row.material_name} × ${row.quantity}，` +
-            `用途：${row.reason}（${new Date(row.created_at).toLocaleString()}）`
+          .map(
+            (row) =>
+              `${row.applicant_name} 申请 ${row.material_name} × ${row.quantity}，` +
+              `用途：${row.reason}（${new Date(row.created_at).toLocaleString()}）`
           )
           .join("\n");
       }
@@ -955,14 +963,15 @@ async function executeTool(
       case "get_my_applications": {
         const r = await client.query(
           "SELECT material_name, quantity, reason, status, created_at " +
-          "FROM inventory.application WHERE applicant_id = $1 ORDER BY created_at DESC LIMIT 10",
+            "FROM inventory.application WHERE applicant_id = $1 ORDER BY created_at DESC LIMIT 10",
           [actorId]
         );
         if (!r.rows.length) return "你还没有提交过耗材申请。";
         return r.rows
-          .map((row) =>
-            `[${row.status === "pending" ? "待审批" : row.status === "approved" ? "已批准" : "已拒绝"}] ` +
-            `${row.material_name} × ${row.quantity}，用途：${row.reason}`
+          .map(
+            (row) =>
+              `[${row.status === "pending" ? "待审批" : row.status === "approved" ? "已批准" : "已拒绝"}] ` +
+              `${row.material_name} × ${row.quantity}，用途：${row.reason}`
           )
           .join("\n");
       }
@@ -970,7 +979,8 @@ async function executeTool(
       case "get_stock_movements": {
         const materialFilter = args.material_name as string | undefined;
         const limit = (args.limit as number) || 10;
-        let query = "SELECT material_id as name, quantity, type, remark, created_at FROM inventory.stock_movement";
+        let query =
+          "SELECT material_id as name, quantity, type, remark, created_at FROM inventory.stock_movement";
         const params: unknown[] = [];
         if (materialFilter) {
           query += " WHERE material_id ILIKE $1";
@@ -981,16 +991,18 @@ async function executeTool(
         const r = await client.query(query, params);
         if (!r.rows.length) return "暂无库存流水记录。";
         return r.rows
-          .map((row) =>
-            `${row.type === "stock_in" ? "入库" : "出库"} ${row.name} × ${row.quantity}，` +
-            `备注：${row.remark}（${new Date(row.created_at).toLocaleString()}）`
+          .map(
+            (row) =>
+              `${row.type === "stock_in" ? "入库" : "出库"} ${row.name} × ${row.quantity}，` +
+              `备注：${row.remark}（${new Date(row.created_at).toLocaleString()}）`
           )
           .join("\n");
       }
 
       case "get_meetings": {
         const status = args.status as string | undefined;
-        let query = "SELECT title, starts_at, ends_at, location, status, summary FROM collaboration.meeting";
+        let query =
+          "SELECT title, starts_at, ends_at, location, status, summary FROM collaboration.meeting";
         const params: unknown[] = [];
         if (status) {
           query += " WHERE status = $1";
@@ -1000,9 +1012,10 @@ async function executeTool(
         const r = await client.query(query, params);
         if (!r.rows.length) return "暂无会议记录。";
         return r.rows
-          .map((row) =>
-            `[${row.status === "scheduled" ? "未开" : row.status === "completed" ? "已完成" : "已取消"}] ` +
-            `${row.title}，${new Date(row.starts_at).toLocaleString()} @ ${row.location}`
+          .map(
+            (row) =>
+              `[${row.status === "scheduled" ? "未开" : row.status === "completed" ? "已完成" : "已取消"}] ` +
+              `${row.title}，${new Date(row.starts_at).toLocaleString()} @ ${row.location}`
           )
           .join("\n");
       }
@@ -1015,9 +1028,10 @@ async function executeTool(
         const r = await client.query(query);
         if (!r.rows.length) return unreadOnly ? "没有未读通知。" : "暂无通知。";
         return r.rows
-          .map((row) =>
-            `[${row.type}] ${row.title}：${row.content.slice(0, 80)}` +
-            `${row.content.length > 80 ? "..." : ""}`
+          .map(
+            (row) =>
+              `[${row.type}] ${row.title}：${row.content.slice(0, 80)}` +
+              `${row.content.length > 80 ? "..." : ""}`
           )
           .join("\n");
       }
@@ -1027,16 +1041,23 @@ async function executeTool(
         const category = args.category as string | undefined;
         const conditions: string[] = ["node_type = 'file'"];
         const params: unknown[] = [];
-        if (search) { conditions.push(`title ILIKE $${params.length + 1}`); params.push(`%${search}%`); }
-        if (category) { conditions.push(`category = $${params.length + 1}`); params.push(category); }
+        if (search) {
+          conditions.push(`title ILIKE $${params.length + 1}`);
+          params.push(`%${search}%`);
+        }
+        if (category) {
+          conditions.push(`category = $${params.length + 1}`);
+          params.push(category);
+        }
         const r = await client.query(
           `SELECT title, category, current_version, description FROM files.lab_file WHERE ${conditions.join(" AND ")} ORDER BY updated_at DESC LIMIT 10`,
           params
         );
         if (!r.rows.length) return "没有找到匹配的文件。";
         return r.rows
-          .map((row) =>
-            `[${row.category}] ${row.title}（v${row.current_version}）：${row.description.slice(0, 60)}`
+          .map(
+            (row) =>
+              `[${row.category}] ${row.title}（v${row.current_version}）：${row.description.slice(0, 60)}`
           )
           .join("\n");
       }
@@ -1054,10 +1075,11 @@ async function executeTool(
         if (!mat.rows.length) {
           mat = await client.query(
             "SELECT id, name, stock, unit FROM inventory.material WHERE name ILIKE $1",
-            [`%${materialName.replace(/（.*）$/, '')}%`]
+            [`%${materialName.replace(/（.*）$/, "")}%`]
           );
         }
-        if (!mat.rows.length) return `错误：耗材"${materialName}"不存在，请先使用 get_inventory_status 查看可用耗材。`;
+        if (!mat.rows.length)
+          return `错误：耗材"${materialName}"不存在，请先使用 get_inventory_status 查看可用耗材。`;
         const m = mat.rows[0];
 
         const appId = randomUUID();
@@ -1090,11 +1112,7 @@ export const aiPlugin: PluginManifest = {
   name: "ai",
   version: "0.1.0",
   description: "AI 智能问答模块：支持 LLM 对话、知识库 RAG 问答、FAQ 模板",
-  capabilities: [
-    "ai:chat",
-    "ai:knowledge",
-    "ai:templates"
-  ],
+  capabilities: ["ai:chat", "ai:knowledge", "ai:templates"],
   routes: [
     {
       method: "POST",
@@ -1165,7 +1183,8 @@ export const aiPlugin: PluginManifest = {
               if (!actor) return { status: 401, body: { error: "Unauthorized" } };
               return {
                 body: {
-                  reply: "AI 服务未配置数据库连接，请设置 DATABASE_URL 环境变量。如需使用 AI 功能，请参考 docs/AI_MODULE.md 配置 AI 提供商。",
+                  reply:
+                    "AI 服务未配置数据库连接，请设置 DATABASE_URL 环境变量。如需使用 AI 功能，请参考 docs/AI_MODULE.md 配置 AI 提供商。",
                   sources: []
                 } as ChatResponse
               };
@@ -1188,9 +1207,10 @@ export const aiPlugin: PluginManifest = {
 
     context.logger.info("ai.plugin.ready", {
       provider: process.env.AI_PROVIDER ?? "ollama",
-      model: process.env.AI_PROVIDER === "openai"
-        ? (process.env.OPENAI_MODEL ?? "gpt-4o-mini")
-        : (process.env.OLLAMA_MODEL ?? "qwen2.5:7b")
+      model:
+        process.env.AI_PROVIDER === "openai"
+          ? (process.env.OPENAI_MODEL ?? "gpt-4o-mini")
+          : (process.env.OLLAMA_MODEL ?? "qwen2.5:7b")
     });
 
     return {
@@ -1221,7 +1241,7 @@ export const aiPlugin: PluginManifest = {
                 content: h.content
               }));
               const recentMessages: ChatMessage[] = [
-                ...dbHistory.map((h) => ({ role: h.role, content: h.content } as ChatMessage)),
+                ...dbHistory.map((h) => ({ role: h.role, content: h.content }) as ChatMessage),
                 ...passedHistory
               ].slice(-10);
 
@@ -1260,7 +1280,8 @@ export const aiPlugin: PluginManifest = {
                   while ((match = invokeRegex.exec(result.content)) !== null) {
                     const name = match[1]!;
                     const args: Record<string, unknown> = {};
-                    const paramRegex = /<parameter name="([^"]+)" string="(true|false)">([^<]*)<\/parameter>/g;
+                    const paramRegex =
+                      /<parameter name="([^"]+)" string="(true|false)">([^<]*)<\/parameter>/g;
                     let pm;
                     while ((pm = paramRegex.exec(match[0])) !== null) {
                       const val = pm[3]!;
@@ -1280,7 +1301,8 @@ export const aiPlugin: PluginManifest = {
                       function: { name: tc.name, arguments: JSON.stringify(tc.arguments) }
                     }))
                   };
-                  if (result.reasoningContent) assistantMsg.reasoning_content = result.reasoningContent;
+                  if (result.reasoningContent)
+                    assistantMsg.reasoning_content = result.reasoningContent;
                   deduped.push(assistantMsg);
                   for (const tc of toolCalls) {
                     const toolResult = await executeTool(tc, pool, actor.id);

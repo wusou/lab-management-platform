@@ -92,10 +92,16 @@ interface ProjectRepository {
   listProjects(): Promise<Project[]>;
   getProject(id: string): Promise<Project | null>;
   createProject(input: Omit<Project, "id" | "createdAt" | "updatedAt">): Promise<Project>;
-  updateProject(id: string, input: Partial<Omit<Project, "id" | "createdAt" | "updatedAt">>): Promise<Project | null>;
+  updateProject(
+    id: string,
+    input: Partial<Omit<Project, "id" | "createdAt" | "updatedAt">>
+  ): Promise<Project | null>;
   listTasks(projectId: string): Promise<ProjectTask[]>;
   createTask(input: Omit<ProjectTask, "id" | "createdAt" | "updatedAt">): Promise<ProjectTask>;
-  updateTask(id: string, input: Partial<Omit<ProjectTask, "id" | "createdAt" | "updatedAt">>): Promise<ProjectTask | null>;
+  updateTask(
+    id: string,
+    input: Partial<Omit<ProjectTask, "id" | "createdAt" | "updatedAt">>
+  ): Promise<ProjectTask | null>;
   listComments(taskId: string): Promise<TaskComment[]>;
   createComment(input: Omit<TaskComment, "id" | "createdAt">): Promise<TaskComment>;
 }
@@ -153,7 +159,9 @@ class MemoryProjectRepository implements ProjectRepository {
   private readonly tasks = structuredClone(seedTasks);
   private readonly comments: TaskComment[] = [];
 
-  async initialize(): Promise<void> { return Promise.resolve(); }
+  async initialize(): Promise<void> {
+    return Promise.resolve();
+  }
 
   async listProjects(): Promise<Project[]> {
     return [...this.projects].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -170,7 +178,10 @@ class MemoryProjectRepository implements ProjectRepository {
     return project;
   }
 
-  async updateProject(id: string, input: Partial<Omit<Project, "id" | "createdAt" | "updatedAt">>): Promise<Project | null> {
+  async updateProject(
+    id: string,
+    input: Partial<Omit<Project, "id" | "createdAt" | "updatedAt">>
+  ): Promise<Project | null> {
     const idx = this.projects.findIndex((p) => p.id === id);
     if (idx === -1) return null;
     this.projects[idx] = { ...this.projects[idx], ...input, updatedAt: new Date().toISOString() };
@@ -183,23 +194,29 @@ class MemoryProjectRepository implements ProjectRepository {
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
-  async createTask(input: Omit<ProjectTask, "id" | "createdAt" | "updatedAt">): Promise<ProjectTask> {
+  async createTask(
+    input: Omit<ProjectTask, "id" | "createdAt" | "updatedAt">
+  ): Promise<ProjectTask> {
     const now = new Date().toISOString();
     const task: ProjectTask = { ...input, id: randomUUID(), createdAt: now, updatedAt: now };
     this.tasks.unshift(task);
     return task;
   }
 
-  async updateTask(id: string, input: Partial<Omit<ProjectTask, "id" | "createdAt" | "updatedAt">>): Promise<ProjectTask | null> {
+  async updateTask(
+    id: string,
+    input: Partial<Omit<ProjectTask, "id" | "createdAt" | "updatedAt">>
+  ): Promise<ProjectTask | null> {
     const idx = this.tasks.findIndex((t) => t.id === id);
     if (idx === -1) return null;
     const prev = this.tasks[idx];
     const updated: ProjectTask = {
       ...prev,
       ...input,
-      completedAt: input.status === "done" && prev.status !== "done"
-        ? new Date().toISOString()
-        : prev.completedAt,
+      completedAt:
+        input.status === "done" && prev.status !== "done"
+          ? new Date().toISOString()
+          : prev.completedAt,
       updatedAt: new Date().toISOString()
     };
     this.tasks[idx] = updated;
@@ -213,7 +230,11 @@ class MemoryProjectRepository implements ProjectRepository {
   }
 
   async createComment(input: Omit<TaskComment, "id" | "createdAt">): Promise<TaskComment> {
-    const comment: TaskComment = { ...input, id: randomUUID(), createdAt: new Date().toISOString() };
+    const comment: TaskComment = {
+      ...input,
+      id: randomUUID(),
+      createdAt: new Date().toISOString()
+    };
     this.comments.unshift(comment);
     return comment;
   }
@@ -284,19 +305,38 @@ class PostgresProjectRepository implements ProjectRepository {
         await this.pool.query(
           `INSERT INTO projects.project (id, name, description, owner_id, owner_name, member_ids, starts_at, ends_at, status, created_at, updated_at)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-          [project.id, project.name, project.description, project.ownerId, project.ownerName,
-           project.memberIds, project.startsAt ?? null, project.endsAt ?? null,
-           project.status, project.createdAt, project.updatedAt]
+          [
+            project.id,
+            project.name,
+            project.description,
+            project.ownerId,
+            project.ownerName,
+            project.memberIds,
+            project.startsAt ?? null,
+            project.endsAt ?? null,
+            project.status,
+            project.createdAt,
+            project.updatedAt
+          ]
         );
       }
       for (const task of seedTasks) {
         await this.pool.query(
           `INSERT INTO projects.task (id, project_id, title, description, assignee_id, assignee_name, priority, status, due_date, created_at, updated_at)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-          [task.id, task.projectId, task.title, task.description,
-           task.assigneeId ?? null, task.assigneeName ?? null,
-           task.priority, task.status, task.dueDate ?? null,
-           task.createdAt, task.updatedAt]
+          [
+            task.id,
+            task.projectId,
+            task.title,
+            task.description,
+            task.assigneeId ?? null,
+            task.assigneeName ?? null,
+            task.priority,
+            task.status,
+            task.dueDate ?? null,
+            task.createdAt,
+            task.updatedAt
+          ]
         );
       }
     }
@@ -317,51 +357,80 @@ class PostgresProjectRepository implements ProjectRepository {
     const r = await this.pool.query(
       `INSERT INTO projects.project (id, name, description, owner_id, owner_name, member_ids, starts_at, ends_at, status)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [id, input.name, input.description, input.ownerId, input.ownerName,
-       input.memberIds, input.startsAt ?? null, input.endsAt ?? null, input.status]
+      [
+        id,
+        input.name,
+        input.description,
+        input.ownerId,
+        input.ownerName,
+        input.memberIds,
+        input.startsAt ?? null,
+        input.endsAt ?? null,
+        input.status
+      ]
     );
     return mapProjectRow(r.rows[0]);
   }
 
-  async updateProject(id: string, input: Partial<Omit<Project, "id" | "createdAt" | "updatedAt">>): Promise<Project | null> {
+  async updateProject(
+    id: string,
+    input: Partial<Omit<Project, "id" | "createdAt" | "updatedAt">>
+  ): Promise<Project | null> {
     const sets: string[] = ["updated_at = now()"];
     const vals: unknown[] = [id];
     let idx = 2;
     for (const [k, v] of Object.entries(input)) {
       const col = k.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
       sets.push(`${col} = $${idx++}`);
-      vals.push(Array.isArray(v) ? v : v ?? null);
+      vals.push(Array.isArray(v) ? v : (v ?? null));
     }
     const r = await this.pool.query(
-      `UPDATE projects.project SET ${sets.join(", ")} WHERE id = $1 RETURNING *`, vals
+      `UPDATE projects.project SET ${sets.join(", ")} WHERE id = $1 RETURNING *`,
+      vals
     );
     return r.rows[0] ? mapProjectRow(r.rows[0]) : null;
   }
 
   async listTasks(projectId: string): Promise<ProjectTask[]> {
     const r = await this.pool.query(
-      "SELECT * FROM projects.task WHERE project_id = $1 ORDER BY updated_at DESC", [projectId]
+      "SELECT * FROM projects.task WHERE project_id = $1 ORDER BY updated_at DESC",
+      [projectId]
     );
     return r.rows.map(mapTaskRow);
   }
 
-  async createTask(input: Omit<ProjectTask, "id" | "createdAt" | "updatedAt">): Promise<ProjectTask> {
+  async createTask(
+    input: Omit<ProjectTask, "id" | "createdAt" | "updatedAt">
+  ): Promise<ProjectTask> {
     const id = randomUUID();
     const r = await this.pool.query(
       `INSERT INTO projects.task (id, project_id, title, description, assignee_id, assignee_name, priority, status, due_date)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [id, input.projectId, input.title, input.description,
-       input.assigneeId ?? null, input.assigneeName ?? null,
-       input.priority, input.status, input.dueDate ?? null]
+      [
+        id,
+        input.projectId,
+        input.title,
+        input.description,
+        input.assigneeId ?? null,
+        input.assigneeName ?? null,
+        input.priority,
+        input.status,
+        input.dueDate ?? null
+      ]
     );
     return mapTaskRow(r.rows[0]);
   }
 
-  async updateTask(id: string, input: Partial<Omit<ProjectTask, "id" | "createdAt" | "updatedAt">>): Promise<ProjectTask | null> {
+  async updateTask(
+    id: string,
+    input: Partial<Omit<ProjectTask, "id" | "createdAt" | "updatedAt">>
+  ): Promise<ProjectTask | null> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
-      const prev = await client.query("SELECT status FROM projects.task WHERE id = $1 FOR UPDATE", [id]);
+      const prev = await client.query("SELECT status FROM projects.task WHERE id = $1 FOR UPDATE", [
+        id
+      ]);
       if (!prev.rows[0]) return null;
 
       const sets: string[] = ["updated_at = now()"];
@@ -378,19 +447,23 @@ class PostgresProjectRepository implements ProjectRepository {
       }
 
       const r = await client.query(
-        `UPDATE projects.task SET ${sets.join(", ")} WHERE id = $1 RETURNING *`, vals
+        `UPDATE projects.task SET ${sets.join(", ")} WHERE id = $1 RETURNING *`,
+        vals
       );
       await client.query("COMMIT");
       return r.rows[0] ? mapTaskRow(r.rows[0]) : null;
     } catch (e) {
       await client.query("ROLLBACK");
       throw e;
-    } finally { client.release(); }
+    } finally {
+      client.release();
+    }
   }
 
   async listComments(taskId: string): Promise<TaskComment[]> {
     const r = await this.pool.query(
-      "SELECT * FROM projects.task_comment WHERE task_id = $1 ORDER BY created_at ASC", [taskId]
+      "SELECT * FROM projects.task_comment WHERE task_id = $1 ORDER BY created_at ASC",
+      [taskId]
     );
     return r.rows.map(mapCommentRow);
   }
@@ -478,11 +551,36 @@ export const projectsPlugin: PluginManifest = {
     { method: "GET", path: "/projects/:id", permission: "project:read", summary: "获取项目详情" },
     { method: "POST", path: "/projects", permission: "project:write", summary: "创建项目" },
     { method: "PATCH", path: "/projects/:id", permission: "project:write", summary: "更新项目" },
-    { method: "GET", path: "/projects/:id/tasks", permission: "project:read", summary: "获取项目任务列表" },
-    { method: "POST", path: "/projects/:id/tasks", permission: "project:write", summary: "创建任务" },
-    { method: "PATCH", path: "/projects/:id/tasks/:taskId", permission: "project:write", summary: "更新任务" },
-    { method: "GET", path: "/projects/:id/tasks/:taskId/comments", permission: "project:read", summary: "获取任务评论" },
-    { method: "POST", path: "/projects/:id/tasks/:taskId/comments", permission: "project:write", summary: "添加任务评论" }
+    {
+      method: "GET",
+      path: "/projects/:id/tasks",
+      permission: "project:read",
+      summary: "获取项目任务列表"
+    },
+    {
+      method: "POST",
+      path: "/projects/:id/tasks",
+      permission: "project:write",
+      summary: "创建任务"
+    },
+    {
+      method: "PATCH",
+      path: "/projects/:id/tasks/:taskId",
+      permission: "project:write",
+      summary: "更新任务"
+    },
+    {
+      method: "GET",
+      path: "/projects/:id/tasks/:taskId/comments",
+      permission: "project:read",
+      summary: "获取任务评论"
+    },
+    {
+      method: "POST",
+      path: "/projects/:id/tasks/:taskId/comments",
+      permission: "project:write",
+      summary: "添加任务评论"
+    }
   ],
   eventsPublished: [
     "projects.project.created",
@@ -501,12 +599,18 @@ export const projectsPlugin: PluginManifest = {
       routes: [
         // GET /projects
         {
-          method: "GET", path: "/projects", permission: "project:read", summary: "获取项目列表",
+          method: "GET",
+          path: "/projects",
+          permission: "project:read",
+          summary: "获取项目列表",
           handler: async () => ({ body: await repo.listProjects() })
         },
         // GET /projects/:id
         {
-          method: "GET", path: "/projects/:id", permission: "project:read", summary: "获取项目详情",
+          method: "GET",
+          path: "/projects/:id",
+          permission: "project:read",
+          summary: "获取项目详情",
           handler: async ({ params }) => {
             const project = await repo.getProject(params.id);
             if (!project) return { status: 404, body: { error: "项目未找到" } };
@@ -515,7 +619,10 @@ export const projectsPlugin: PluginManifest = {
         },
         // POST /projects
         {
-          method: "POST", path: "/projects", permission: "project:write", summary: "创建项目",
+          method: "POST",
+          path: "/projects",
+          permission: "project:write",
+          summary: "创建项目",
           handler: async ({ actor, body }) => {
             if (!actor) return { status: 401, body: { error: "Unauthorized" } };
             const req = body as Partial<ProjectCreateRequest>;
@@ -533,11 +640,17 @@ export const projectsPlugin: PluginManifest = {
             });
 
             await context.eventBus.publish(
-              createDomainEvent("projects", "projects.project.created", { projectId: project.id, name: project.name })
+              createDomainEvent("projects", "projects.project.created", {
+                projectId: project.id,
+                name: project.name
+              })
             );
             await context.audit.record({
-              actorId: actor.id, action: "projects.project.created",
-              targetType: "project", targetId: project.id, occurredAt: new Date().toISOString(),
+              actorId: actor.id,
+              action: "projects.project.created",
+              targetType: "project",
+              targetId: project.id,
+              occurredAt: new Date().toISOString(),
               metadata: { name: project.name }
             });
 
@@ -546,7 +659,10 @@ export const projectsPlugin: PluginManifest = {
         },
         // PATCH /projects/:id
         {
-          method: "PATCH", path: "/projects/:id", permission: "project:write", summary: "更新项目",
+          method: "PATCH",
+          path: "/projects/:id",
+          permission: "project:write",
+          summary: "更新项目",
           handler: async ({ actor, params, body }) => {
             if (!actor) return { status: 401, body: { error: "Unauthorized" } };
             const req = body as Partial<ProjectUpdateRequest>;
@@ -564,8 +680,11 @@ export const projectsPlugin: PluginManifest = {
               createDomainEvent("projects", "projects.project.updated", { projectId: project.id })
             );
             await context.audit.record({
-              actorId: actor.id, action: "projects.project.updated",
-              targetType: "project", targetId: project.id, occurredAt: new Date().toISOString()
+              actorId: actor.id,
+              action: "projects.project.updated",
+              targetType: "project",
+              targetId: project.id,
+              occurredAt: new Date().toISOString()
             });
 
             return { body: project };
@@ -573,12 +692,18 @@ export const projectsPlugin: PluginManifest = {
         },
         // GET /projects/:id/tasks
         {
-          method: "GET", path: "/projects/:id/tasks", permission: "project:read", summary: "获取项目任务列表",
+          method: "GET",
+          path: "/projects/:id/tasks",
+          permission: "project:read",
+          summary: "获取项目任务列表",
           handler: async ({ params }) => ({ body: await repo.listTasks(params.id) })
         },
         // POST /projects/:id/tasks
         {
-          method: "POST", path: "/projects/:id/tasks", permission: "project:write", summary: "创建任务",
+          method: "POST",
+          path: "/projects/:id/tasks",
+          permission: "project:write",
+          summary: "创建任务",
           handler: async ({ actor, params, body }) => {
             if (!actor) return { status: 401, body: { error: "Unauthorized" } };
             const req = body as Partial<TaskCreateRequest>;
@@ -588,7 +713,9 @@ export const projectsPlugin: PluginManifest = {
             if (!project) return { status: 404, body: { error: "项目未找到" } };
 
             const assigneeName = req.assigneeId
-              ? (project.memberIds.includes(req.assigneeId) ? `成员 ${req.assigneeId}` : undefined)
+              ? project.memberIds.includes(req.assigneeId)
+                ? `成员 ${req.assigneeId}`
+                : undefined
               : undefined;
 
             const task = await repo.createTask({
@@ -603,11 +730,17 @@ export const projectsPlugin: PluginManifest = {
             });
 
             await context.eventBus.publish(
-              createDomainEvent("projects", "projects.task.created", { taskId: task.id, projectId: params.id })
+              createDomainEvent("projects", "projects.task.created", {
+                taskId: task.id,
+                projectId: params.id
+              })
             );
             await context.audit.record({
-              actorId: actor.id, action: "projects.task.created",
-              targetType: "task", targetId: task.id, occurredAt: new Date().toISOString(),
+              actorId: actor.id,
+              action: "projects.task.created",
+              targetType: "task",
+              targetId: task.id,
+              occurredAt: new Date().toISOString(),
               metadata: { projectId: params.id, title: task.title }
             });
 
@@ -616,7 +749,10 @@ export const projectsPlugin: PluginManifest = {
         },
         // PATCH /projects/:id/tasks/:taskId
         {
-          method: "PATCH", path: "/projects/:id/tasks/:taskId", permission: "project:write", summary: "更新任务",
+          method: "PATCH",
+          path: "/projects/:id/tasks/:taskId",
+          permission: "project:write",
+          summary: "更新任务",
           handler: async ({ actor, params, body }) => {
             if (!actor) return { status: 401, body: { error: "Unauthorized" } };
             const req = body as Partial<TaskUpdateRequest>;
@@ -631,11 +767,18 @@ export const projectsPlugin: PluginManifest = {
             if (!task) return { status: 404, body: { error: "任务未找到" } };
 
             await context.eventBus.publish(
-              createDomainEvent("projects", "projects.task.updated", { taskId: task.id, projectId: params.id, status: task.status })
+              createDomainEvent("projects", "projects.task.updated", {
+                taskId: task.id,
+                projectId: params.id,
+                status: task.status
+              })
             );
             await context.audit.record({
-              actorId: actor.id, action: "projects.task.updated",
-              targetType: "task", targetId: task.id, occurredAt: new Date().toISOString(),
+              actorId: actor.id,
+              action: "projects.task.updated",
+              targetType: "task",
+              targetId: task.id,
+              occurredAt: new Date().toISOString(),
               metadata: { projectId: params.id, status: task.status }
             });
 
@@ -644,12 +787,18 @@ export const projectsPlugin: PluginManifest = {
         },
         // GET /projects/:id/tasks/:taskId/comments
         {
-          method: "GET", path: "/projects/:id/tasks/:taskId/comments", permission: "project:read", summary: "获取任务评论",
+          method: "GET",
+          path: "/projects/:id/tasks/:taskId/comments",
+          permission: "project:read",
+          summary: "获取任务评论",
           handler: async ({ params }) => ({ body: await repo.listComments(params.taskId) })
         },
         // POST /projects/:id/tasks/:taskId/comments
         {
-          method: "POST", path: "/projects/:id/tasks/:taskId/comments", permission: "project:write", summary: "添加任务评论",
+          method: "POST",
+          path: "/projects/:id/tasks/:taskId/comments",
+          permission: "project:write",
+          summary: "添加任务评论",
           handler: async ({ actor, params, body }) => {
             if (!actor) return { status: 401, body: { error: "Unauthorized" } };
             const req = body as Partial<CommentCreateRequest>;
@@ -663,11 +812,17 @@ export const projectsPlugin: PluginManifest = {
             });
 
             await context.eventBus.publish(
-              createDomainEvent("projects", "projects.task.comment.added", { taskId: params.taskId, commentId: comment.id })
+              createDomainEvent("projects", "projects.task.comment.added", {
+                taskId: params.taskId,
+                commentId: comment.id
+              })
             );
             await context.audit.record({
-              actorId: actor.id, action: "projects.task.comment.added",
-              targetType: "task_comment", targetId: comment.id, occurredAt: new Date().toISOString(),
+              actorId: actor.id,
+              action: "projects.task.comment.added",
+              targetType: "task_comment",
+              targetId: comment.id,
+              occurredAt: new Date().toISOString(),
               metadata: { taskId: params.taskId }
             });
 

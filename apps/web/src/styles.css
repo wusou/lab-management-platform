@@ -1196,7 +1196,7 @@ textarea {
 
 .ai-message-role {
   display: block;
-  font-size: .78rem;
+  font-size: 0.78rem;
   font-weight: 700;
   color: #527263;
   margin-bottom: 4px;
@@ -1222,7 +1222,7 @@ textarea {
 }
 
 .ai-typing {
-  opacity: .6;
+  opacity: 0.6;
   font-style: italic;
 }
 
@@ -1234,7 +1234,7 @@ textarea {
   border-radius: 8px;
   background: #fef2f2;
   color: #991b1b;
-  font-size: .88rem;
+  font-size: 0.88rem;
 }
 
 .ai-error-banner svg {
@@ -1246,7 +1246,7 @@ textarea {
   gap: 6px;
   flex-wrap: wrap;
   align-items: center;
-  font-size: .78rem;
+  font-size: 0.78rem;
   color: #64766d;
   padding: 4px 0;
 }
@@ -1257,7 +1257,7 @@ textarea {
   border-radius: 4px;
   background: #e0e7db;
   color: #527263;
-  font-size: .75rem;
+  font-size: 0.75rem;
 }
 
 .ai-chat-input {
@@ -1278,7 +1278,7 @@ textarea {
   padding: 10px 44px 10px 14px;
   border: 1px solid #c8d4cb;
   border-radius: 8px;
-  font-size: .9rem;
+  font-size: 0.9rem;
   font-family: inherit;
   line-height: 1.5;
   outline: none;
@@ -1290,7 +1290,7 @@ textarea {
 
 .ai-chat-input textarea:focus {
   border-color: #527263;
-  box-shadow: 0 0 0 2px rgba(82, 114, 99, .15);
+  box-shadow: 0 0 0 2px rgba(82, 114, 99, 0.15);
 }
 
 .ai-chat-input .send-btn {
@@ -1334,7 +1334,7 @@ textarea {
   gap: 6px;
   align-items: center;
   margin: 0 0 4px;
-  font-size: .9rem;
+  font-size: 0.9rem;
   color: #527263;
 }
 
@@ -1343,7 +1343,7 @@ textarea {
   padding: 8px 10px;
   border: none;
   border-radius: 6px;
-  font-size: .82rem;
+  font-size: 0.82rem;
   color: #38463e;
   background: #eef2ec;
   cursor: pointer;
@@ -1390,14 +1390,14 @@ textarea {
   padding: 10px 14px;
   border: 1px solid #c8d4cb;
   border-radius: 8px;
-  font-size: .9rem;
+  font-size: 0.9rem;
   font-family: inherit;
   outline: none;
 }
 
 .knowledge-form textarea:focus {
   border-color: #527263;
-  box-shadow: 0 0 0 2px rgba(82, 114, 99, .15);
+  box-shadow: 0 0 0 2px rgba(82, 114, 99, 0.15);
 }
 
 .knowledge-list {
@@ -1422,7 +1422,7 @@ textarea {
 
 .knowledge-card-header strong {
   display: block;
-  font-size: .95rem;
+  font-size: 0.95rem;
   color: #38463e;
 }
 
@@ -1431,21 +1431,21 @@ textarea {
   margin-top: 4px;
   padding: 1px 8px;
   border-radius: 4px;
-  font-size: .72rem;
+  font-size: 0.72rem;
   background: #e0e7db;
   color: #527263;
 }
 
 .knowledge-card p {
   margin: 0 0 8px;
-  font-size: .85rem;
+  font-size: 0.85rem;
   color: #64766d;
   line-height: 1.6;
 }
 
 .knowledge-card small {
   color: #96a89d;
-  font-size: .76rem;
+  font-size: 0.76rem;
 }
 
 @media (max-width: 1080px) {

@@ -1,6 +1,4 @@
-import {
-  Bell, LogOut, XCircle
-} from "lucide-react";
+import { Bell, LogOut, XCircle } from "lucide-react";
 import type { SyntheticEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LoginForm } from "./LoginForm";
@@ -13,15 +11,36 @@ import { AIPanel } from "./AIPanel";
 import { ModuleCard } from "./Shared";
 
 import type {
-  Actor, ChatHistoryRecord, ChatMessage, ChatResponse, FaqTemplate,
-  FileCategory, FileNodeType, FileVersion, FileVisibility,
-  InventoryApplication, KnowledgeDocument, KnowledgeSource,
-  LabFile, ManagedUser, Material, Meeting, NotificationItem, StockMovement, Summary
+  Actor,
+  ChatHistoryRecord,
+  ChatMessage,
+  ChatResponse,
+  FaqTemplate,
+  FileCategory,
+  FileNodeType,
+  FileVersion,
+  FileVisibility,
+  InventoryApplication,
+  KnowledgeDocument,
+  KnowledgeSource,
+  LabFile,
+  ManagedUser,
+  Material,
+  Meeting,
+  NotificationItem,
+  StockMovement,
+  Summary
 } from "../types";
 
 import {
-  accountPreviewLimit, apiBase, applicationPreviewLimit, defaultResetPassword,
-  notificationTypeText, phonePattern, roleText, toDatetimeLocal
+  accountPreviewLimit,
+  apiBase,
+  applicationPreviewLimit,
+  defaultResetPassword,
+  notificationTypeText,
+  phonePattern,
+  roleText,
+  toDatetimeLocal
 } from "../utils/helpers";
 
 export function App() {
@@ -1058,7 +1077,10 @@ export function App() {
           title: knowledgeTitle,
           content: knowledgeContent,
           category: knowledgeCategory,
-          tags: knowledgeTags.split(",").map((t) => t.trim()).filter(Boolean)
+          tags: knowledgeTags
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean)
         })
       });
       const payload = await response.json();
@@ -1086,7 +1108,10 @@ export function App() {
           title: knowledgeTitle,
           content: knowledgeContent,
           category: knowledgeCategory,
-          tags: knowledgeTags.split(",").map((t) => t.trim()).filter(Boolean)
+          tags: knowledgeTags
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean)
         })
       });
       const payload = await response.json();
@@ -1145,9 +1170,13 @@ export function App() {
   if (!actor) {
     return (
       <LoginForm
-        username={username} setUsername={setUsername}
-        password={password} setPassword={setPassword}
-        loading={loading} message={message} onSubmit={login}
+        username={username}
+        setUsername={setUsername}
+        password={password}
+        setPassword={setPassword}
+        loading={loading}
+        message={message}
+        onSubmit={login}
       />
     );
   }
@@ -1255,15 +1284,24 @@ export function App() {
           unreadNotifications={unreadNotifications}
           canManageMeetings={canManageMeetings}
           loading={loading}
-          meetingTitle={meetingTitle} setMeetingTitle={setMeetingTitle}
-          meetingStartsAt={meetingStartsAt} setMeetingStartsAt={setMeetingStartsAt}
-          meetingEndsAt={meetingEndsAt} setMeetingEndsAt={setMeetingEndsAt}
-          meetingLocation={meetingLocation} setMeetingLocation={setMeetingLocation}
-          meetingOnlineUrl={meetingOnlineUrl} setMeetingOnlineUrl={setMeetingOnlineUrl}
-          meetingParticipants={meetingParticipants} setMeetingParticipants={setMeetingParticipants}
-          meetingSummary={meetingSummary} setMeetingSummary={setMeetingSummary}
-          announcementTitle={announcementTitle} setAnnouncementTitle={setAnnouncementTitle}
-          announcementContent={announcementContent} setAnnouncementContent={setAnnouncementContent}
+          meetingTitle={meetingTitle}
+          setMeetingTitle={setMeetingTitle}
+          meetingStartsAt={meetingStartsAt}
+          setMeetingStartsAt={setMeetingStartsAt}
+          meetingEndsAt={meetingEndsAt}
+          setMeetingEndsAt={setMeetingEndsAt}
+          meetingLocation={meetingLocation}
+          setMeetingLocation={setMeetingLocation}
+          meetingOnlineUrl={meetingOnlineUrl}
+          setMeetingOnlineUrl={setMeetingOnlineUrl}
+          meetingParticipants={meetingParticipants}
+          setMeetingParticipants={setMeetingParticipants}
+          meetingSummary={meetingSummary}
+          setMeetingSummary={setMeetingSummary}
+          announcementTitle={announcementTitle}
+          setAnnouncementTitle={setAnnouncementTitle}
+          announcementContent={announcementContent}
+          setAnnouncementContent={setAnnouncementContent}
           onCreateMeeting={createMeeting}
           onCompleteMeeting={completeMeeting}
           onPublishAnnouncement={publishAnnouncement}
@@ -1278,20 +1316,32 @@ export function App() {
           users={users}
           accountTab={accountTab}
           setAccountTab={setAccountTab}
-          userSearch={userSearch} setUserSearch={setUserSearch}
-          contactPhone={contactPhone} setContactPhone={setContactPhone}
-          currentPassword={currentPassword} setCurrentPassword={setCurrentPassword}
-          newPassword={newPassword} setNewPassword={setNewPassword}
-          confirmPassword={confirmPassword} setConfirmPassword={setConfirmPassword}
-          registerUsername={registerUsername} setRegisterUsername={setRegisterUsername}
-          registerPassword={registerPassword} setRegisterPassword={setRegisterPassword}
-          registerStudentId={registerStudentId} setRegisterStudentId={setRegisterStudentId}
-          registerDisplayName={registerDisplayName} setRegisterDisplayName={setRegisterDisplayName}
-          registerRole={registerRole} setRegisterRole={setRegisterRole}
+          userSearch={userSearch}
+          setUserSearch={setUserSearch}
+          contactPhone={contactPhone}
+          setContactPhone={setContactPhone}
+          currentPassword={currentPassword}
+          setCurrentPassword={setCurrentPassword}
+          newPassword={newPassword}
+          setNewPassword={setNewPassword}
+          confirmPassword={confirmPassword}
+          setConfirmPassword={setConfirmPassword}
+          registerUsername={registerUsername}
+          setRegisterUsername={setRegisterUsername}
+          registerPassword={registerPassword}
+          setRegisterPassword={setRegisterPassword}
+          registerStudentId={registerStudentId}
+          setRegisterStudentId={setRegisterStudentId}
+          registerDisplayName={registerDisplayName}
+          setRegisterDisplayName={setRegisterDisplayName}
+          registerRole={registerRole}
+          setRegisterRole={setRegisterRole}
           displayedUsers={displayedUsers}
           hasMoreUsers={hasMoreUsers}
-          showAllAccounts={showAllAccounts} setShowAllAccounts={setShowAllAccounts}
-          showInactiveAccounts={showInactiveAccounts} setShowInactiveAccounts={setShowInactiveAccounts}
+          showAllAccounts={showAllAccounts}
+          setShowAllAccounts={setShowAllAccounts}
+          showInactiveAccounts={showInactiveAccounts}
+          setShowInactiveAccounts={setShowInactiveAccounts}
           onUpdateContact={updateContact}
           onChangePassword={changePassword}
           onRegisterUser={registerUser}
@@ -1300,20 +1350,28 @@ export function App() {
           onUpdateUserRole={updateUserRole}
         />
         <AIPanel
-          aiMessage={aiMessage} setAiMessage={setAiMessage}
+          aiMessage={aiMessage}
+          setAiMessage={setAiMessage}
           aiChatMessages={aiChatMessages}
           aiLoading={aiLoading}
           aiError={aiError}
           aiSources={aiSources}
           knowledgeDocs={knowledgeDocs}
           faqTemplates={faqTemplates}
-          knowledgeTitle={knowledgeTitle} setKnowledgeTitle={setKnowledgeTitle}
-          knowledgeContent={knowledgeContent} setKnowledgeContent={setKnowledgeContent}
-          knowledgeCategory={knowledgeCategory} setKnowledgeCategory={setKnowledgeCategory}
-          knowledgeTags={knowledgeTags} setKnowledgeTags={setKnowledgeTags}
-          editingKnowledgeId={editingKnowledgeId} setEditingKnowledgeId={setEditingKnowledgeId}
-          showKnowledgePanel={showKnowledgePanel} setShowKnowledgePanel={setShowKnowledgePanel}
-          aiActiveTab={aiActiveTab} setAiActiveTab={setAiActiveTab}
+          knowledgeTitle={knowledgeTitle}
+          setKnowledgeTitle={setKnowledgeTitle}
+          knowledgeContent={knowledgeContent}
+          setKnowledgeContent={setKnowledgeContent}
+          knowledgeCategory={knowledgeCategory}
+          setKnowledgeCategory={setKnowledgeCategory}
+          knowledgeTags={knowledgeTags}
+          setKnowledgeTags={setKnowledgeTags}
+          editingKnowledgeId={editingKnowledgeId}
+          setEditingKnowledgeId={setEditingKnowledgeId}
+          showKnowledgePanel={showKnowledgePanel}
+          setShowKnowledgePanel={setShowKnowledgePanel}
+          aiActiveTab={aiActiveTab}
+          setAiActiveTab={setAiActiveTab}
           onSendAiMessage={sendAiMessage}
           onClearAiHistory={clearAiHistory}
           onUseFaqTemplate={useFaqTemplate}

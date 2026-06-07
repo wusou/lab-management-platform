@@ -15,6 +15,8 @@ services:
       - /workspace/plugins/collaboration/node_modules
       - /workspace/plugins/files/node_modules
       - /workspace/plugins/inventory/node_modules
+      - /workspace/plugins/ai/node_modules
+      - /workspace/plugins/projects/node_modules
     depends_on:
       postgres:
         condition: service_healthy
@@ -35,6 +37,8 @@ services:
       - /workspace/plugins/collaboration/node_modules
       - /workspace/plugins/files/node_modules
       - /workspace/plugins/inventory/node_modules
+      - /workspace/plugins/ai/node_modules
+      - /workspace/plugins/projects/node_modules
     depends_on:
       - api
 

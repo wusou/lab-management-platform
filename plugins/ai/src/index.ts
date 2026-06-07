@@ -89,7 +89,7 @@ interface ChatProvider {
 interface ToolDefinition {
   name: string;
   description: string;
-  parameters: Record<string, unknown>;
+  parameters: any;
 }
 
 interface ChatResponseMessage {
@@ -101,7 +101,7 @@ interface ChatResponseMessage {
 interface ToolCall {
   id: string;
   name: string;
-  arguments: Record<string, unknown>;
+  arguments: any;
 }
 
 // ── Ollama Provider ────────────────────────────────────
@@ -123,7 +123,7 @@ class OllamaChatProvider implements ChatProvider {
       return m;
     });
 
-    const body: Record<string, unknown> = {
+    const body: any = {
       model: this.model,
       messages: cleanMessages,
       stream: false,
@@ -146,7 +146,7 @@ class OllamaChatProvider implements ChatProvider {
       message?: {
         content?: string;
         reasoning_content?: string;
-        tool_calls?: Array<{ function: { name: string; arguments: Record<string, unknown> } }>;
+        tool_calls?: Array<{ function: { name: string; arguments: any } }>;
       };
     };
     const content = data.message?.content ?? null;
@@ -179,7 +179,7 @@ class OpenAICompatibleChatProvider implements ChatProvider {
     // Clean messages for API compatibility
     const cleanMessages = messages.map((m) => {
       if (m.role === "assistant" && m.tool_calls?.length) {
-        const msg: Record<string, unknown> = {
+        const msg: any = {
           role: m.role,
           content: null,
           tool_calls: m.tool_calls
@@ -196,7 +196,7 @@ class OpenAICompatibleChatProvider implements ChatProvider {
       return { role: m.role, content: m.content };
     });
 
-    const body: Record<string, unknown> = {
+    const body: any = {
       model: this.model,
       messages: cleanMessages,
       temperature: 0.7,
@@ -536,7 +536,7 @@ class PostgresKnowledgeRepository implements KnowledgeRepository {
           [vecStr, limit]
         );
         if (result.rows.length > 0) {
-          return result.rows.map((row) => ({
+          return result.rows.map((row: any) => ({
             id: row.id,
             title: row.title,
             content: row.content,
@@ -566,7 +566,7 @@ class PostgresKnowledgeRepository implements KnowledgeRepository {
       [`%${query}%`, limit]
     );
 
-    return result.rows.map((row) => ({
+    return result.rows.map((row: any) => ({
       id: row.id,
       title: row.title,
       content: row.content,
@@ -780,7 +780,7 @@ class PostgresFaqTemplateRepository implements FaqTemplateRepository {
 
   async listAll(): Promise<FaqTemplate[]> {
     const result = await this.pool.query("SELECT * FROM ai.faq_template ORDER BY sort_order");
-    return result.rows.map((row) => ({
+    return result.rows.map((row: any) => ({
       id: String(row.id),
       question: String(row.question),
       category: String(row.category),
@@ -792,7 +792,7 @@ class PostgresFaqTemplateRepository implements FaqTemplateRepository {
 // ── Row Mappers ────────────────────────────────────────
 
 function mapKnowledgeRow(
-  row: Record<string, unknown> | { [key: string]: unknown }
+  row: any | { [key: string]: unknown }
 ): KnowledgeDocument {
   return {
     id: String(row.id),
@@ -806,7 +806,7 @@ function mapKnowledgeRow(
   };
 }
 
-function mapChatHistoryRow(row: Record<string, unknown>): ChatHistoryRecord {
+function mapChatHistoryRow(row: any): ChatHistoryRecord {
   return {
     id: String(row.id),
     userId: String(row.user_id),
@@ -937,7 +937,7 @@ async function executeTool(toolCall: ToolCall, pool: pg.Pool, actorId: string): 
         if (!r.rows.length) return "当前库存中没有耗材记录。";
         return r.rows
           .map(
-            (row) =>
+            (row: any) =>
               `${row.name}（${row.spec}）：库存 ${row.stock}${row.unit}，` +
               `${row.stock <= row.warn_stock ? "⚠️ 低于预警值 " + row.warn_stock + "，" : ""}` +
               `存放于 ${row.location}`
@@ -953,7 +953,7 @@ async function executeTool(toolCall: ToolCall, pool: pg.Pool, actorId: string): 
         if (!r.rows.length) return "当前没有待审批的申请。";
         return r.rows
           .map(
-            (row) =>
+            (row: any) =>
               `${row.applicant_name} 申请 ${row.material_name} × ${row.quantity}，` +
               `用途：${row.reason}（${new Date(row.created_at).toLocaleString()}）`
           )
@@ -969,7 +969,7 @@ async function executeTool(toolCall: ToolCall, pool: pg.Pool, actorId: string): 
         if (!r.rows.length) return "你还没有提交过耗材申请。";
         return r.rows
           .map(
-            (row) =>
+            (row: any) =>
               `[${row.status === "pending" ? "待审批" : row.status === "approved" ? "已批准" : "已拒绝"}] ` +
               `${row.material_name} × ${row.quantity}，用途：${row.reason}`
           )
@@ -992,7 +992,7 @@ async function executeTool(toolCall: ToolCall, pool: pg.Pool, actorId: string): 
         if (!r.rows.length) return "暂无库存流水记录。";
         return r.rows
           .map(
-            (row) =>
+            (row: any) =>
               `${row.type === "stock_in" ? "入库" : "出库"} ${row.name} × ${row.quantity}，` +
               `备注：${row.remark}（${new Date(row.created_at).toLocaleString()}）`
           )
@@ -1013,7 +1013,7 @@ async function executeTool(toolCall: ToolCall, pool: pg.Pool, actorId: string): 
         if (!r.rows.length) return "暂无会议记录。";
         return r.rows
           .map(
-            (row) =>
+            (row: any) =>
               `[${row.status === "scheduled" ? "未开" : row.status === "completed" ? "已完成" : "已取消"}] ` +
               `${row.title}，${new Date(row.starts_at).toLocaleString()} @ ${row.location}`
           )
@@ -1029,9 +1029,9 @@ async function executeTool(toolCall: ToolCall, pool: pg.Pool, actorId: string): 
         if (!r.rows.length) return unreadOnly ? "没有未读通知。" : "暂无通知。";
         return r.rows
           .map(
-            (row) =>
-              `[${row.type}] ${row.title}：${row.content.slice(0, 80)}` +
-              `${row.content.length > 80 ? "..." : ""}`
+            (row: any) =>
+              `[${row.type}] ${row.title}：${String(row.content).slice(0, 80)}` +
+              `${String(row.content).length > 80 ? "..." : ""}`
           )
           .join("\n");
       }
@@ -1056,8 +1056,8 @@ async function executeTool(toolCall: ToolCall, pool: pg.Pool, actorId: string): 
         if (!r.rows.length) return "没有找到匹配的文件。";
         return r.rows
           .map(
-            (row) =>
-              `[${row.category}] ${row.title}（v${row.current_version}）：${row.description.slice(0, 60)}`
+            (row: any) =>
+              `[${row.category}] ${row.title}（v${row.current_version}）：${String(row.description).slice(0, 60)}`
           )
           .join("\n");
       }
@@ -1279,7 +1279,7 @@ export const aiPlugin: PluginManifest = {
                   let callIdx = 0;
                   while ((match = invokeRegex.exec(result.content)) !== null) {
                     const name = match[1]!;
-                    const args: Record<string, unknown> = {};
+                    const args: any = {};
                     const paramRegex =
                       /<parameter name="([^"]+)" string="(true|false)">([^<]*)<\/parameter>/g;
                     let pm;

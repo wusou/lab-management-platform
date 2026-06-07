@@ -5,12 +5,17 @@ import pg from "pg";
 // ── Types ──────────────────────────────────────────────
 
 interface ChatMessage {
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant" | "system" | "tool";
   content: string;
+  tool_calls?: Array<{ id: string; type: string; function: { name: string; arguments: string } }>;
+  tool_call_id?: string;
+  name?: string;
+  reasoning_content?: string;
 }
 
 interface ChatRequest {
   message: string;
+  history?: Array<{ role: string; content: string }>;
 }
 
 interface ChatResponse {
@@ -23,6 +28,7 @@ interface KnowledgeSource {
   title: string;
   content: string;
   snippet: string;
+  score?: number;
 }
 
 interface KnowledgeDocument {
@@ -50,6 +56,15 @@ interface KnowledgeUpdateRequest {
   tags?: string[];
 }
 
+interface KnowledgeUploadRequest {
+  title: string;
+  content: string;
+  category?: string;
+  tags?: string[];
+  fileName?: string;
+  mimeType?: string;
+}
+
 interface ChatHistoryRecord {
   id: string;
   userId: string;
@@ -65,10 +80,36 @@ interface FaqTemplate {
   sortOrder: number;
 }
 
+interface EmbeddingVector {
+  id: string;
+  docId: string;
+  chunkIndex: number;
+  chunkText: string;
+  embedding: number[];
+}
+
 // ── AI Provider Interface ──────────────────────────────
 
 interface ChatProvider {
-  chat(messages: ChatMessage[]): Promise<string>;
+  chat(messages: ChatMessage[], tools?: ToolDefinition[]): Promise<ChatResponseMessage>;
+}
+
+interface ToolDefinition {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+interface ChatResponseMessage {
+  content: string | null;
+  toolCalls?: ToolCall[];
+  reasoningContent?: string;
+}
+
+interface ToolCall {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
 }
 
 // ── Ollama Provider ────────────────────────────────────
@@ -82,16 +123,26 @@ class OllamaChatProvider implements ChatProvider {
     this.model = model;
   }
 
-  async chat(messages: ChatMessage[]): Promise<string> {
+  async chat(messages: ChatMessage[], tools?: ToolDefinition[]): Promise<ChatResponseMessage> {
+    const cleanMessages = messages.map((m) => {
+      if (m.role === "assistant" && m.tool_calls?.length) {
+        return { ...m, content: null };
+      }
+      return m;
+    });
+
+    const body: Record<string, unknown> = {
+      model: this.model,
+      messages: cleanMessages,
+      stream: false,
+      options: { temperature: 0.7, num_predict: 2048 }
+    };
+    if (tools?.length) body.tools = tools;
+
     const response = await fetch(`${this.baseUrl}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: this.model,
-        messages,
-        stream: false,
-        options: { temperature: 0.7, num_predict: 2048 }
-      })
+      body: JSON.stringify(body)
     });
 
     if (!response.ok) {
@@ -99,8 +150,19 @@ class OllamaChatProvider implements ChatProvider {
       throw new Error(`Ollama API error ${response.status}: ${text}`);
     }
 
-    const data = (await response.json()) as { message?: { content?: string } };
-    return data.message?.content ?? "（未收到回复）";
+    const data = (await response.json()) as {
+      message?: { content?: string; reasoning_content?: string; tool_calls?: Array<{ function: { name: string; arguments: Record<string, unknown> } }> };
+    };
+    const content = data.message?.content ?? null;
+    const reasoningContent = data.message?.reasoning_content;
+    const rawCalls = data.message?.tool_calls;
+    const toolCalls: ToolCall[] | undefined = rawCalls?.map((tc, i) => ({
+      id: `call_${i}`,
+      name: tc.function.name,
+      arguments: tc.function.arguments
+    }));
+
+    return { content, toolCalls, reasoningContent };
   }
 }
 
@@ -117,19 +179,40 @@ class OpenAICompatibleChatProvider implements ChatProvider {
     this.model = model;
   }
 
-  async chat(messages: ChatMessage[]): Promise<string> {
+  async chat(messages: ChatMessage[], tools?: ToolDefinition[]): Promise<ChatResponseMessage> {
+    // Clean messages for API compatibility
+    const cleanMessages = messages.map((m) => {
+      if (m.role === "assistant" && m.tool_calls?.length) {
+        const msg: Record<string, unknown> = { role: m.role, content: null, tool_calls: m.tool_calls };
+        if (m.reasoning_content) msg.reasoning_content = m.reasoning_content;
+        return msg;
+      }
+      if (m.role === "tool") {
+        return { role: m.role, tool_call_id: m.tool_call_id, content: m.content };
+      }
+      if (m.role === "assistant" && m.reasoning_content) {
+        return { role: m.role, content: m.content, reasoning_content: m.reasoning_content };
+      }
+      return { role: m.role, content: m.content };
+    });
+
+    const body: Record<string, unknown> = {
+      model: this.model,
+      messages: cleanMessages,
+      temperature: 0.7,
+      max_tokens: 2048
+    };
+    if (tools?.length) {
+      body.tools = tools.map((t) => ({ type: "function", function: t }));
+    }
+
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.apiKey}`
       },
-      body: JSON.stringify({
-        model: this.model,
-        messages,
-        temperature: 0.7,
-        max_tokens: 2048
-      })
+      body: JSON.stringify(body)
     });
 
     if (!response.ok) {
@@ -138,9 +221,23 @@ class OpenAICompatibleChatProvider implements ChatProvider {
     }
 
     const data = (await response.json()) as {
-      choices?: { message?: { content?: string } }[];
+      choices?: { message?: {
+        content?: string;
+        reasoning_content?: string;
+        tool_calls?: Array<{ id: string; function: { name: string; arguments: string } }>;
+      } }[];
     };
-    return data.choices?.[0]?.message?.content ?? "（未收到回复）";
+    const msg = data.choices?.[0]?.message;
+    const content = msg?.content ?? null;
+    const reasoningContent = msg?.reasoning_content;
+    const rawCalls = msg?.tool_calls;
+    const toolCalls: ToolCall[] | undefined = rawCalls?.map((tc) => ({
+      id: tc.id,
+      name: tc.function.name,
+      arguments: JSON.parse(tc.function.arguments || "{}") as Record<string, unknown>
+    }));
+
+    return { content, toolCalls, reasoningContent };
   }
 }
 
@@ -164,18 +261,110 @@ function createChatProvider(): ChatProvider {
   );
 }
 
-// ── Knowledge Base Repository ──────────────────────────
+// ── Embedding Provider Interface ────────────────────────
+
+interface EmbeddingProvider {
+  embed(texts: string[]): Promise<number[][]>;
+}
+
+class OllamaEmbeddingProvider implements EmbeddingProvider {
+  private readonly baseUrl: string;
+  private readonly model: string;
+
+  constructor(baseUrl: string, model: string) {
+    this.baseUrl = baseUrl;
+    this.model = model;
+  }
+
+  async embed(texts: string[]): Promise<number[][]> {
+    const results: number[][] = [];
+    for (const text of texts) {
+      const response = await fetch(`${this.baseUrl}/api/embeddings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: this.model, prompt: text })
+      });
+      if (!response.ok) {
+        throw new Error(`Ollama embedding error ${response.status}`);
+      }
+      const data = (await response.json()) as { embedding?: number[] };
+      if (data.embedding) {
+        results.push(data.embedding);
+      } else {
+        results.push(new Array(768).fill(0));
+      }
+    }
+    return results;
+  }
+}
+
+class OpenAIEmbeddingProvider implements EmbeddingProvider {
+  private readonly baseUrl: string;
+  private readonly apiKey: string;
+  private readonly model: string;
+
+  constructor(baseUrl: string, apiKey: string, model: string) {
+    this.baseUrl = baseUrl;
+    this.apiKey = apiKey;
+    this.model = model;
+  }
+
+  async embed(texts: string[]): Promise<number[][]> {
+    const response = await fetch(`${this.baseUrl}/embeddings`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.apiKey}`
+      },
+      body: JSON.stringify({ model: this.model, input: texts })
+    });
+    if (!response.ok) {
+      throw new Error(`OpenAI embedding error ${response.status}`);
+    }
+    const data = (await response.json()) as { data?: Array<{ embedding: number[] }> };
+    return (data.data ?? []).map((d) => d.embedding);
+  }
+}
+
+class NoopEmbeddingProvider implements EmbeddingProvider {
+  async embed(_texts: string[]): Promise<number[][]> {
+    return _texts.map(() => new Array(384).fill(0));
+  }
+}
+
+function createEmbeddingProvider(): EmbeddingProvider {
+  const provider = (process.env.EMBEDDING_PROVIDER ?? process.env.AI_PROVIDER ?? "noop").toLowerCase();
+
+  if (provider === "openai") {
+    return new OpenAIEmbeddingProvider(
+      process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1",
+      process.env.OPENAI_API_KEY ?? "",
+      process.env.EMBEDDING_MODEL ?? "text-embedding-3-small"
+    );
+  }
+
+  if (provider === "ollama") {
+    return new OllamaEmbeddingProvider(
+      process.env.OLLAMA_BASE_URL ?? "http://localhost:11434",
+      process.env.EMBEDDING_MODEL ?? "nomic-embed-text"
+    );
+  }
+
+  return new NoopEmbeddingProvider();
+}
 
 interface KnowledgeRepository {
   initialize(): Promise<void>;
   search(query: string, limit?: number): Promise<KnowledgeSource[]>;
   listAll(): Promise<KnowledgeDocument[]>;
   create(input: KnowledgeCreateRequest & { createdBy: string }): Promise<KnowledgeDocument>;
+  createWithEmbedding(input: KnowledgeCreateRequest & { createdBy: string }): Promise<KnowledgeDocument>;
   update(
     id: string,
     input: KnowledgeUpdateRequest
   ): Promise<KnowledgeDocument | { error: string; status: number }>;
   delete(id: string): Promise<{ error?: string; status?: number }>;
+  reindexAll(): Promise<number>;
 }
 
 interface ChatHistoryRepository {
@@ -196,12 +385,15 @@ interface FaqTemplateRepository {
 
 class PostgresKnowledgeRepository implements KnowledgeRepository {
   private readonly pool: pg.Pool;
+  private readonly embeddingProvider: EmbeddingProvider;
 
-  constructor(databaseUrl: string) {
+  constructor(databaseUrl: string, embeddingProvider?: EmbeddingProvider) {
     this.pool = new pg.Pool({ connectionString: databaseUrl });
+    this.embeddingProvider = embeddingProvider ?? createEmbeddingProvider();
   }
 
   async initialize(): Promise<void> {
+    // Create schema and core tables first (no vector dependency)
     await this.pool.query(`
       CREATE SCHEMA IF NOT EXISTS ai;
 
@@ -234,6 +426,58 @@ class PostgresKnowledgeRepository implements KnowledgeRepository {
       );
     `);
 
+    // Try pgvector extension; if installed, use native vector type, else TEXT fallback
+    let hasVector = false;
+    try {
+      await this.pool.query("CREATE EXTENSION IF NOT EXISTS vector");
+      // Verify the extension is usable
+      const r = await this.pool.query(
+        "SELECT 1 FROM pg_extension WHERE extname = 'vector'"
+      );
+      hasVector = r.rows.length > 0;
+    } catch {
+      hasVector = false;
+    }
+
+    if (hasVector) {
+      try {
+        await this.pool.query(`
+          CREATE TABLE IF NOT EXISTS ai.knowledge_embedding (
+            id TEXT PRIMARY KEY,
+            doc_id TEXT NOT NULL REFERENCES ai.knowledge_document(id) ON DELETE CASCADE,
+            chunk_index INTEGER NOT NULL DEFAULT 0,
+            chunk_text TEXT NOT NULL,
+            embedding vector(384)
+          )
+        `);
+        await this.pool.query(
+          "CREATE INDEX IF NOT EXISTS idx_embedding_doc ON ai.knowledge_embedding(doc_id)"
+        );
+      } catch {
+        // vector type still not available, fall through to TEXT fallback
+        hasVector = false;
+      }
+    }
+
+    if (!hasVector) {
+      // Fallback: TEXT column for embedding (keyword search only)
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS ai.knowledge_embedding (
+          id TEXT PRIMARY KEY,
+          doc_id TEXT NOT NULL REFERENCES ai.knowledge_document(id) ON DELETE CASCADE,
+          chunk_index INTEGER NOT NULL DEFAULT 0,
+          chunk_text TEXT NOT NULL,
+          embedding_text TEXT
+        )
+      `);
+      await this.pool.query(
+        "CREATE INDEX IF NOT EXISTS idx_embedding_doc ON ai.knowledge_embedding(doc_id)"
+      );
+    }
+
+    // Store whether vector search is available for search() to use
+    (this as Record<string, unknown>)._hasVector = hasVector;
+
     await this.seedFaqTemplates();
   }
 
@@ -264,6 +508,39 @@ class PostgresKnowledgeRepository implements KnowledgeRepository {
   }
 
   async search(query: string, limit = 3): Promise<KnowledgeSource[]> {
+    // 1. Try embedding-based semantic search
+    try {
+      const queryEmbeds = await this.embeddingProvider.embed([query]);
+      const queryVec = queryEmbeds[0];
+      if (queryVec && queryVec.some((v) => v !== 0)) {
+        const vecStr = `[${queryVec.join(",")}]`;
+        const result = await this.pool.query<{
+          id: string; title: string; content: string; chunk_text: string; distance: number;
+        }>(
+          `SELECT d.id, d.title, d.content, e.chunk_text,
+                  e.embedding <=> $1::vector AS distance
+           FROM ai.knowledge_embedding e
+           JOIN ai.knowledge_document d ON d.id = e.doc_id
+           ORDER BY e.embedding <=> $1::vector
+           LIMIT $2`,
+          [vecStr, limit]
+        );
+        if (result.rows.length > 0) {
+          return result.rows.map((row) => ({
+            id: row.id,
+            title: row.title,
+            content: row.content,
+            snippet: (row.chunk_text ?? row.content).slice(0, 300) +
+              ((row.chunk_text ?? row.content).length > 300 ? "..." : ""),
+            score: 1 - (row.distance ?? 0)
+          }));
+        }
+      }
+    } catch {
+      // pgvector embedding search unavailable, fall back to ILIKE
+    }
+
+    // 2. Fallback to keyword search
     const result = await this.pool.query<{
       id: string;
       title: string;
@@ -334,6 +611,8 @@ class PostgresKnowledgeRepository implements KnowledgeRepository {
   }
 
   async delete(id: string): Promise<{ error?: string; status?: number }> {
+    // Delete embeddings first
+    await this.pool.query("DELETE FROM ai.knowledge_embedding WHERE doc_id = $1", [id]);
     const result = await this.pool.query(
       "DELETE FROM ai.knowledge_document WHERE id = $1",
       [id]
@@ -343,6 +622,95 @@ class PostgresKnowledgeRepository implements KnowledgeRepository {
     }
     return {};
   }
+
+  async createWithEmbedding(
+    input: KnowledgeCreateRequest & { createdBy: string }
+  ): Promise<KnowledgeDocument> {
+    const doc = await this.create(input);
+
+    // Chunk and embed the content
+    const chunks = chunkText(doc.content, 500, 100);
+    try {
+      const embeddings = await this.embeddingProvider.embed(chunks);
+      for (let i = 0; i < chunks.length; i++) {
+        const vecStr = `[${embeddings[i].join(",")}]`;
+        try {
+          await this.pool.query(
+            `INSERT INTO ai.knowledge_embedding (id, doc_id, chunk_index, chunk_text, embedding)
+             VALUES ($1, $2, $3, $4, $5::vector)`,
+            [randomUUID(), doc.id, i, chunks[i], vecStr]
+          );
+        } catch {
+          // Fallback: store as text when no pgvector
+          await this.pool.query(
+            `INSERT INTO ai.knowledge_embedding (id, doc_id, chunk_index, chunk_text, embedding_text)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [randomUUID(), doc.id, i, chunks[i], vecStr]
+          );
+        }
+      }
+    } catch {
+      // Embedding generation failed — doc is still searchable via keyword
+    }
+
+    return doc;
+  }
+
+  async reindexAll(): Promise<number> {
+    const docs = await this.listAll();
+    // Clear existing embeddings
+    await this.pool.query("DELETE FROM ai.knowledge_embedding");
+    let count = 0;
+    for (const doc of docs) {
+      const chunks = chunkText(doc.content, 500, 100);
+      try {
+        const embeddings = await this.embeddingProvider.embed(chunks);
+        for (let i = 0; i < chunks.length; i++) {
+          const vecStr = `[${embeddings[i].join(",")}]`;
+          try {
+            await this.pool.query(
+              `INSERT INTO ai.knowledge_embedding (id, doc_id, chunk_index, chunk_text, embedding)
+               VALUES ($1, $2, $3, $4, $5::vector)`,
+              [randomUUID(), doc.id, i, chunks[i], vecStr]
+            );
+          } catch {
+            await this.pool.query(
+              `INSERT INTO ai.knowledge_embedding (id, doc_id, chunk_index, chunk_text, embedding_text)
+               VALUES ($1, $2, $3, $4, $5)`,
+              [randomUUID(), doc.id, i, chunks[i], vecStr]
+            );
+          }
+        }
+        count++;
+      } catch {
+        // Skip docs that fail embedding
+      }
+    }
+    return count;
+  }
+}
+
+// ── Text Chunking Utility ────────────────────────────────
+
+function chunkText(text: string, maxLen: number, overlap: number): string[] {
+  if (text.length <= maxLen) return [text];
+  const chunks: string[] = [];
+  let start = 0;
+  while (start < text.length) {
+    let end = start + maxLen;
+    if (end < text.length) {
+      // Try to break at sentence boundary
+      const lastPeriod = text.lastIndexOf("。", end);
+      const lastNewline = text.lastIndexOf("\n", end);
+      const breakPoint = Math.max(lastPeriod, lastNewline, end - 50);
+      end = breakPoint > start + 50 ? breakPoint + 1 : end;
+    }
+    chunks.push(text.slice(start, Math.min(end, text.length)));
+    start = end - overlap;
+    if (start < 0) start = 0;
+    if (start >= text.length) break;
+  }
+  return chunks;
 }
 
 class PostgresChatHistoryRepository implements ChatHistoryRepository {
@@ -440,14 +808,16 @@ function mapChatHistoryRow(row: Record<string, unknown>): ChatHistoryRecord {
 
 // ── RAG Engine ─────────────────────────────────────────
 
-const SYSTEM_PROMPT = `你是实验室智能助手，专门为实验室成员提供帮助。请根据以下规则回答：
+const SYSTEM_PROMPT = `你是实验室智能助手，可以主动查询项目数据并帮助用户操作。
 
-1. 使用中文回答，语气友好、专业。
-2. 如果提供了知识库参考文档，优先基于参考文档的内容回答。
-3. 如果知识库中没有相关信息，可以基于你的知识回答，但要明确说明信息来源。
-4. 对于不确定的问题，建议用户咨询实验室管理员。
-5. 拒绝回答与实验室工作无关的敏感话题。
-6. 回答简洁明了，重点突出。`;
+你有以下能力：
+1. 查询库存、申请、会议、通知、文件等实时项目数据
+2. 帮助用户提交耗材申请
+3. 基于知识库回答实验室规章制度和流程问题
+
+使用工具获取数据，不要编造数据。回答简洁专业，用中文。
+如果用户问的问题需要当前数据（如库存还剩多少、有哪些待审批），必须调用对应工具查询后回答。
+如果用户要求执行操作（如帮我申请耗材），先确认信息再调用工具。`;
 
 function buildRagPrompt(userMessage: string, sources: KnowledgeSource[]): ChatMessage[] {
   const messages: ChatMessage[] = [{ role: "system", content: SYSTEM_PROMPT }];
@@ -464,6 +834,254 @@ function buildRagPrompt(userMessage: string, sources: KnowledgeSource[]): ChatMe
 
   messages.push({ role: "user", content: userMessage });
   return messages;
+}
+
+// ── Agent Tools ────────────────────────────────────────
+
+const AGENT_TOOLS: ToolDefinition[] = [
+  {
+    name: "get_inventory_status",
+    description: "查询当前耗材库存状态，包括所有耗材的名称、库存量、预警阈值、位置",
+    parameters: { type: "object", properties: {}, required: [] }
+  },
+  {
+    name: "get_pending_applications",
+    description: "查询待审批的耗材申请列表",
+    parameters: { type: "object", properties: {}, required: [] }
+  },
+  {
+    name: "get_my_applications",
+    description: "查询当前用户的耗材申请记录及状态",
+    parameters: { type: "object", properties: {}, required: [] }
+  },
+  {
+    name: "get_stock_movements",
+    description: "查询最近的库存流水记录（入库/出库）",
+    parameters: {
+      type: "object",
+      properties: {
+        material_name: { type: "string", description: "可选，按耗材名称筛选" },
+        limit: { type: "number", description: "返回条数，默认 10" }
+      },
+      required: []
+    }
+  },
+  {
+    name: "get_meetings",
+    description: "查询近期会议安排",
+    parameters: {
+      type: "object",
+      properties: {
+        status: { type: "string", description: "可选，scheduled=未开会, completed=已完成" }
+      },
+      required: []
+    }
+  },
+  {
+    name: "get_notifications",
+    description: "查询站内通知",
+    parameters: {
+      type: "object",
+      properties: {
+        unread_only: { type: "boolean", description: "是否只看未读，默认 true" }
+      },
+      required: []
+    }
+  },
+  {
+    name: "get_file_list",
+    description: "浏览文件资料列表",
+    parameters: {
+      type: "object",
+      properties: {
+        search: { type: "string", description: "可选，按标题搜索" },
+        category: { type: "string", description: "可选，分类：sop/template/record/dataset/other" }
+      },
+      required: []
+    }
+  },
+  {
+    name: "submit_application",
+    description: "为用户提交耗材申请（需确认耗材名称和数量）",
+    parameters: {
+      type: "object",
+      properties: {
+        material_name: { type: "string", description: "耗材名称（需与库存中名称一致）" },
+        quantity: { type: "number", description: "申请数量" },
+        reason: { type: "string", description: "用途说明" }
+      },
+      required: ["material_name", "quantity", "reason"]
+    }
+  }
+];
+
+async function executeTool(
+  toolCall: ToolCall,
+  pool: pg.Pool,
+  actorId: string
+): Promise<string> {
+  const args = toolCall.arguments;
+  const client = await pool.connect();
+  try {
+    switch (toolCall.name) {
+      case "get_inventory_status": {
+        const r = await client.query(
+          "SELECT name, spec, stock, warn_stock, unit, location FROM inventory.material ORDER BY name"
+        );
+        if (!r.rows.length) return "当前库存中没有耗材记录。";
+        return r.rows
+          .map((row) =>
+            `${row.name}（${row.spec}）：库存 ${row.stock}${row.unit}，` +
+            `${row.stock <= row.warn_stock ? "⚠️ 低于预警值 " + row.warn_stock + "，" : ""}` +
+            `存放于 ${row.location}`
+          )
+          .join("\n");
+      }
+
+      case "get_pending_applications": {
+        const r = await client.query(
+          "SELECT applicant_name, material_name, quantity, reason, status, created_at " +
+          "FROM inventory.application WHERE status = 'pending' ORDER BY created_at DESC"
+        );
+        if (!r.rows.length) return "当前没有待审批的申请。";
+        return r.rows
+          .map((row) =>
+            `${row.applicant_name} 申请 ${row.material_name} × ${row.quantity}，` +
+            `用途：${row.reason}（${new Date(row.created_at).toLocaleString()}）`
+          )
+          .join("\n");
+      }
+
+      case "get_my_applications": {
+        const r = await client.query(
+          "SELECT material_name, quantity, reason, status, created_at " +
+          "FROM inventory.application WHERE applicant_id = $1 ORDER BY created_at DESC LIMIT 10",
+          [actorId]
+        );
+        if (!r.rows.length) return "你还没有提交过耗材申请。";
+        return r.rows
+          .map((row) =>
+            `[${row.status === "pending" ? "待审批" : row.status === "approved" ? "已批准" : "已拒绝"}] ` +
+            `${row.material_name} × ${row.quantity}，用途：${row.reason}`
+          )
+          .join("\n");
+      }
+
+      case "get_stock_movements": {
+        const materialFilter = args.material_name as string | undefined;
+        const limit = (args.limit as number) || 10;
+        let query = "SELECT material_id as name, quantity, type, remark, created_at FROM inventory.stock_movement";
+        const params: unknown[] = [];
+        if (materialFilter) {
+          query += " WHERE material_id ILIKE $1";
+          params.push(`%${materialFilter}%`);
+        }
+        query += " ORDER BY created_at DESC LIMIT $" + (params.length + 1);
+        params.push(limit);
+        const r = await client.query(query, params);
+        if (!r.rows.length) return "暂无库存流水记录。";
+        return r.rows
+          .map((row) =>
+            `${row.type === "stock_in" ? "入库" : "出库"} ${row.name} × ${row.quantity}，` +
+            `备注：${row.remark}（${new Date(row.created_at).toLocaleString()}）`
+          )
+          .join("\n");
+      }
+
+      case "get_meetings": {
+        const status = args.status as string | undefined;
+        let query = "SELECT title, starts_at, ends_at, location, status, summary FROM collaboration.meeting";
+        const params: unknown[] = [];
+        if (status) {
+          query += " WHERE status = $1";
+          params.push(status);
+        }
+        query += " ORDER BY starts_at DESC LIMIT 10";
+        const r = await client.query(query, params);
+        if (!r.rows.length) return "暂无会议记录。";
+        return r.rows
+          .map((row) =>
+            `[${row.status === "scheduled" ? "未开" : row.status === "completed" ? "已完成" : "已取消"}] ` +
+            `${row.title}，${new Date(row.starts_at).toLocaleString()} @ ${row.location}`
+          )
+          .join("\n");
+      }
+
+      case "get_notifications": {
+        const unreadOnly = args.unread_only !== false;
+        const query = unreadOnly
+          ? "SELECT title, content, type, created_at FROM collaboration.notification WHERE read_at IS NULL ORDER BY created_at DESC LIMIT 10"
+          : "SELECT title, content, type, created_at FROM collaboration.notification ORDER BY created_at DESC LIMIT 10";
+        const r = await client.query(query);
+        if (!r.rows.length) return unreadOnly ? "没有未读通知。" : "暂无通知。";
+        return r.rows
+          .map((row) =>
+            `[${row.type}] ${row.title}：${row.content.slice(0, 80)}` +
+            `${row.content.length > 80 ? "..." : ""}`
+          )
+          .join("\n");
+      }
+
+      case "get_file_list": {
+        const search = args.search as string | undefined;
+        const category = args.category as string | undefined;
+        const conditions: string[] = ["node_type = 'file'"];
+        const params: unknown[] = [];
+        if (search) { conditions.push(`title ILIKE $${params.length + 1}`); params.push(`%${search}%`); }
+        if (category) { conditions.push(`category = $${params.length + 1}`); params.push(category); }
+        const r = await client.query(
+          `SELECT title, category, current_version, description FROM files.lab_file WHERE ${conditions.join(" AND ")} ORDER BY updated_at DESC LIMIT 10`,
+          params
+        );
+        if (!r.rows.length) return "没有找到匹配的文件。";
+        return r.rows
+          .map((row) =>
+            `[${row.category}] ${row.title}（v${row.current_version}）：${row.description.slice(0, 60)}`
+          )
+          .join("\n");
+      }
+
+      case "submit_application": {
+        const materialName = args.material_name as string;
+        const quantity = (args.quantity as number) || 1;
+        const reason = (args.reason as string) || "AI 协助申请";
+
+        // Match by name, or name+spec combined
+        let mat = await client.query(
+          "SELECT id, name, stock, unit FROM inventory.material WHERE name ILIKE $1 OR (name || '（' || spec || '）') ILIKE $1",
+          [`%${materialName}%`]
+        );
+        if (!mat.rows.length) {
+          mat = await client.query(
+            "SELECT id, name, stock, unit FROM inventory.material WHERE name ILIKE $1",
+            [`%${materialName.replace(/（.*）$/, '')}%`]
+          );
+        }
+        if (!mat.rows.length) return `错误：耗材"${materialName}"不存在，请先使用 get_inventory_status 查看可用耗材。`;
+        const m = mat.rows[0];
+
+        const appId = randomUUID();
+        await client.query(
+          `INSERT INTO inventory.application (id, material_id, material_name, applicant_id, applicant_name, quantity, reason, status, created_at)
+           VALUES ($1, $2, $3, $4, 'AI_Agent', $5, $6, 'pending', now())`,
+          [appId, m.id, m.name, actorId, quantity, reason]
+        );
+
+        await client.query(
+          `INSERT INTO inventory.stock_movement (id, material_id, operator_id, quantity, type, remark, created_at)
+           VALUES ($1, $2, $3, $4, 'application_out', $5, now())`,
+          [randomUUID(), m.id, actorId, quantity, `AI Agent 提交申请：${reason}`]
+        );
+
+        return `已提交申请：${m.name} × ${quantity}${m.unit}，用途：${reason}。申请状态：待审批。`;
+      }
+
+      default:
+        return `未知工具：${toolCall.name}`;
+    }
+  } finally {
+    client.release();
+  }
 }
 
 // ── Plugin Manifest ────────────────────────────────────
@@ -558,7 +1176,8 @@ export const aiPlugin: PluginManifest = {
     }
 
     const pool = new pg.Pool({ connectionString: databaseUrl });
-    const knowledgeRepo = new PostgresKnowledgeRepository(databaseUrl);
+    const embeddingProvider = createEmbeddingProvider();
+    const knowledgeRepo = new PostgresKnowledgeRepository(databaseUrl, embeddingProvider);
     const chatHistoryRepo = new PostgresChatHistoryRepository(pool);
     const faqRepo = new PostgresFaqTemplateRepository(pool);
     const chatProvider = createChatProvider();
@@ -582,7 +1201,7 @@ export const aiPlugin: PluginManifest = {
           method: "POST",
           path: "/ai/chat",
           permission: "ai:use",
-          summary: "发送消息给 AI 助手",
+          summary: "发送消息给 AI 助手（支持 Agent 工具调用）",
           handler: async ({ actor, body }) => {
             if (!actor) return { status: 401, body: { error: "Unauthorized" } };
 
@@ -592,22 +1211,100 @@ export const aiPlugin: PluginManifest = {
             }
 
             try {
-              // 1. Search knowledge base
+              // 1. Search knowledge base with embeddings
               const sources = await knowledgeRepo.search(request.message);
 
-              // 2. Get recent chat history
-              const history = await chatHistoryRepo.getHistory(actor.id, 10);
-              const recentMessages: ChatMessage[] = history.map((h) => ({
-                role: h.role,
+              // 2. Get chat history (use passed history from frontend + DB history)
+              const dbHistory = await chatHistoryRepo.getHistory(actor.id, 6);
+              const passedHistory: ChatMessage[] = (request.history ?? []).map((h) => ({
+                role: h.role as "user" | "assistant",
                 content: h.content
               }));
+              const recentMessages: ChatMessage[] = [
+                ...dbHistory.map((h) => ({ role: h.role, content: h.content } as ChatMessage)),
+                ...passedHistory
+              ].slice(-10);
 
-              // 3. Build RAG prompt with history and knowledge context
+              // 3. Build messages with improved context management
               const ragMessages = buildRagPrompt(request.message, sources);
-              const allMessages = [...ragMessages.slice(0, -1), ...recentMessages.slice(-6), ragMessages[ragMessages.length - 1]!];
+              const messages: ChatMessage[] = [
+                ragMessages[0]!,
+                ...ragMessages.slice(1, -1),
+                ...recentMessages,
+                ragMessages[ragMessages.length - 1]!
+              ];
 
-              // 4. Call AI
-              const reply = await chatProvider.chat(allMessages);
+              // Deduplicate consecutive identical messages
+              const deduped: ChatMessage[] = [];
+              for (const m of messages) {
+                const prev = deduped[deduped.length - 1];
+                if (prev && prev.role === m.role && prev.content === m.content) continue;
+                deduped.push(m);
+              }
+
+              // 4. Agent loop: call AI with tools, execute tool calls, repeat
+              let reply = "";
+              let toolCallCount = 0;
+              const maxToolRounds = 3;
+
+              for (let round = 0; round < maxToolRounds; round++) {
+                const result = await chatProvider.chat(deduped, AGENT_TOOLS);
+
+                let toolCalls: ToolCall[] = result.toolCalls || [];
+
+                // Fallback: parse text-based <invoke> tool calls from content
+                if (!toolCalls.length && result.content) {
+                  const invokeRegex = /<invoke name="([^"]+)">[\s\S]*?<\/invoke>/g;
+                  let match;
+                  let callIdx = 0;
+                  while ((match = invokeRegex.exec(result.content)) !== null) {
+                    const name = match[1]!;
+                    const args: Record<string, unknown> = {};
+                    const paramRegex = /<parameter name="([^"]+)" string="(true|false)">([^<]*)<\/parameter>/g;
+                    let pm;
+                    while ((pm = paramRegex.exec(match[0])) !== null) {
+                      const val = pm[3]!;
+                      args[pm[1]!] = pm[2] === "false" ? Number(val) || val : val;
+                    }
+                    toolCalls.push({ id: `fallback_${callIdx++}`, name, arguments: args });
+                  }
+                }
+
+                if (toolCalls.length) {
+                  const assistantMsg: ChatMessage = {
+                    role: "assistant",
+                    content: result.content || "",
+                    tool_calls: toolCalls.map((tc) => ({
+                      id: tc.id,
+                      type: "function",
+                      function: { name: tc.name, arguments: JSON.stringify(tc.arguments) }
+                    }))
+                  };
+                  if (result.reasoningContent) assistantMsg.reasoning_content = result.reasoningContent;
+                  deduped.push(assistantMsg);
+                  for (const tc of toolCalls) {
+                    const toolResult = await executeTool(tc, pool, actor.id);
+                    deduped.push({
+                      role: "tool",
+                      tool_call_id: tc.id,
+                      content: toolResult
+                    } as ChatMessage);
+                    toolCallCount++;
+                  }
+                } else if (result.content) {
+                  reply = result.content;
+                  break;
+                } else {
+                  reply = "（AI 未返回有效响应）";
+                  break;
+                }
+              }
+
+              if (!reply && toolCallCount > 0) {
+                // Final call to summarize tool results
+                const finalResult = await chatProvider.chat(deduped);
+                reply = finalResult.content ?? "（工具已执行，但 AI 未返回总结）";
+              }
 
               // 5. Save to history
               await chatHistoryRepo.addMessage(actor.id, "user", request.message);
@@ -622,7 +1319,8 @@ export const aiPlugin: PluginManifest = {
                 metadata: {
                   messageLength: request.message.length,
                   replyLength: reply.length,
-                  sourcesCount: sources.length
+                  sourcesCount: sources.length,
+                  toolCalls: toolCallCount
                 }
               });
 
@@ -692,7 +1390,7 @@ export const aiPlugin: PluginManifest = {
               return { status: 400, body: { error: "title and content are required" } };
             }
 
-            const doc = await knowledgeRepo.create({
+            const doc = await knowledgeRepo.createWithEmbedding({
               title: input.title,
               content: input.content,
               category: input.category,
@@ -760,6 +1458,77 @@ export const aiPlugin: PluginManifest = {
             });
 
             return { body: { ok: true } };
+          }
+        },
+
+        // ── Document Upload ──
+        {
+          method: "POST",
+          path: "/ai/knowledge/upload",
+          permission: "ai:use",
+          summary: "上传文档到知识库（支持 Markdown/JSON/TXT，自动生成向量嵌入）",
+          handler: async ({ actor, body }) => {
+            if (!actor) return { status: 401, body: { error: "Unauthorized" } };
+
+            const input = body as Partial<KnowledgeUploadRequest>;
+            if (!input.title?.trim() || !input.content?.trim()) {
+              return { status: 400, body: { error: "title and content are required" } };
+            }
+
+            const doc = await knowledgeRepo.createWithEmbedding({
+              title: input.title.trim(),
+              content: input.content.trim(),
+              category: input.category ?? "general",
+              tags: input.tags ?? [],
+              createdBy: actor.id
+            });
+
+            await context.audit.record({
+              actorId: actor.id,
+              action: "ai.knowledge.uploaded",
+              targetType: "ai_knowledge",
+              targetId: doc.id,
+              occurredAt: new Date().toISOString(),
+              metadata: {
+                title: doc.title,
+                fileName: input.fileName ?? "unknown",
+                mimeType: input.mimeType ?? "text/plain",
+                contentLength: input.content.length
+              }
+            });
+
+            return { status: 201, body: doc };
+          }
+        },
+
+        // ── Reindex ──
+        {
+          method: "POST",
+          path: "/ai/knowledge/reindex",
+          permission: "ai:use",
+          summary: "重建所有知识文档的向量索引",
+          handler: async ({ actor }) => {
+            if (!actor) return { status: 401, body: { error: "Unauthorized" } };
+
+            try {
+              const count = await knowledgeRepo.reindexAll();
+              await context.audit.record({
+                actorId: actor.id,
+                action: "ai.knowledge.reindexed",
+                targetType: "ai_knowledge",
+                occurredAt: new Date().toISOString(),
+                metadata: { documentCount: count }
+              });
+              return { body: { ok: true, reindexedCount: count } };
+            } catch (error) {
+              return {
+                status: 500,
+                body: {
+                  error: "重建索引失败",
+                  detail: error instanceof Error ? error.message : "Unknown error"
+                }
+              };
+            }
           }
         },
 

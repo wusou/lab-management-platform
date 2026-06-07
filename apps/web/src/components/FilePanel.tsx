@@ -1,3 +1,4 @@
+import type { SyntheticEvent } from "react";
 import { Download, FileText, Folder, Link as LinkIcon, Upload } from "lucide-react";
 import { fileCategoryText, formatFileSize, visibilityText } from "../utils/helpers";
 import type { FileCategory, FileNodeType, FileVersion, FileVisibility, LabFile } from "../types";
@@ -33,8 +34,8 @@ interface FilePanelProps {
   versionNote: string;
   setVersionNote: (v: string) => void;
   onFileUpload: (file: File | null) => void;
-  onRegisterFile: (e: React.SyntheticEvent<HTMLFormElement>) => void;
-  onAddFileVersion: (e: React.SyntheticEvent<HTMLFormElement>) => void;
+  onRegisterFile: (e: SyntheticEvent<HTMLFormElement>) => void;
+  onAddFileVersion: (e: SyntheticEvent<HTMLFormElement>) => void;
   onDownloadVersion: (version: FileVersion) => void;
 }
 

@@ -1,3 +1,4 @@
+import type { SyntheticEvent } from "react";
 import { FlaskConical } from "lucide-react";
 
 interface LoginFormProps {
@@ -7,7 +8,7 @@ interface LoginFormProps {
   setPassword: (v: string) => void;
   loading: boolean;
   message: string;
-  onSubmit: (e: React.SyntheticEvent<HTMLFormElement>) => void;
+  onSubmit: (e: SyntheticEvent<HTMLFormElement>) => void;
 }
 
 export function LoginForm({ username, setUsername, password, setPassword, loading, message, onSubmit }: LoginFormProps) {

@@ -1,3 +1,4 @@
+import type { SyntheticEvent } from "react";
 import { CheckCircle2, ClipboardList, Database, PackageCheck, Send, ShieldCheck, XCircle } from "lucide-react";
 import { Metric } from "./Shared";
 import { statusText, applicationPreviewLimit } from "../utils/helpers";
@@ -28,7 +29,7 @@ interface InventoryPanelProps {
   setMovementMaterialFilter: (v: string) => void;
   movementTypeFilter: string;
   setMovementTypeFilter: (v: string) => void;
-  onSubmitApplication: (e: React.SyntheticEvent<HTMLFormElement>) => void;
+  onSubmitApplication: (e: SyntheticEvent<HTMLFormElement>) => void;
   onStockIn: () => void;
   onReviewApplication: (id: string, action: "approve" | "reject") => void;
 }

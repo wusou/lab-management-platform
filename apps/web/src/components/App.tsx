@@ -1,8 +1,5 @@
 import {
-  Bell, BookOpen, Bot, Boxes, CalendarClock, CheckCircle2, ClipboardList,
-  Database, Download, FileText, Folder, HelpCircle, KeyRound,
-  Link as LinkIcon, LogOut, Megaphone, MessageCircle, PackageCheck,
-  Plus, Send, ShieldCheck, Smartphone, Trash2, Upload, Users, XCircle
+  Bell, LogOut, XCircle
 } from "lucide-react";
 import type { SyntheticEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -16,16 +13,15 @@ import { AIPanel } from "./AIPanel";
 import { ModuleCard } from "./Shared";
 
 import type {
-  Actor, ChatMessage, FaqTemplate, FileCategory, FileNodeType, FileVersion,
-  FileVisibility, InventoryApplication, KnowledgeDocument, KnowledgeSource,
+  Actor, ChatHistoryRecord, ChatMessage, ChatResponse, FaqTemplate,
+  FileCategory, FileNodeType, FileVersion, FileVisibility,
+  InventoryApplication, KnowledgeDocument, KnowledgeSource,
   LabFile, ManagedUser, Material, Meeting, NotificationItem, StockMovement, Summary
 } from "../types";
 
 import {
   accountPreviewLimit, apiBase, applicationPreviewLimit, defaultResetPassword,
-  fileCategoryText, formatFileSize, meetingStatusText, notificationTypeText,
-  permissionLabels, phonePattern, rolePermissions, roleText, statusText,
-  toDatetimeLocal, visibilityText
+  notificationTypeText, phonePattern, roleText, toDatetimeLocal
 } from "../utils/helpers";
 
 export function App() {
@@ -1302,6 +1298,30 @@ export function App() {
           onResetUserPassword={resetUserPassword}
           onDeleteUser={deleteUser}
           onUpdateUserRole={updateUserRole}
+        />
+        <AIPanel
+          aiMessage={aiMessage} setAiMessage={setAiMessage}
+          aiChatMessages={aiChatMessages}
+          aiLoading={aiLoading}
+          aiError={aiError}
+          aiSources={aiSources}
+          knowledgeDocs={knowledgeDocs}
+          faqTemplates={faqTemplates}
+          knowledgeTitle={knowledgeTitle} setKnowledgeTitle={setKnowledgeTitle}
+          knowledgeContent={knowledgeContent} setKnowledgeContent={setKnowledgeContent}
+          knowledgeCategory={knowledgeCategory} setKnowledgeCategory={setKnowledgeCategory}
+          knowledgeTags={knowledgeTags} setKnowledgeTags={setKnowledgeTags}
+          editingKnowledgeId={editingKnowledgeId} setEditingKnowledgeId={setEditingKnowledgeId}
+          showKnowledgePanel={showKnowledgePanel} setShowKnowledgePanel={setShowKnowledgePanel}
+          aiActiveTab={aiActiveTab} setAiActiveTab={setAiActiveTab}
+          onSendAiMessage={sendAiMessage}
+          onClearAiHistory={clearAiHistory}
+          onUseFaqTemplate={useFaqTemplate}
+          onLoadKnowledgeDocs={loadKnowledgeDocs}
+          onCreateKnowledgeDoc={createKnowledgeDoc}
+          onUpdateKnowledgeDoc={updateKnowledgeDoc}
+          onDeleteKnowledgeDoc={deleteKnowledgeDoc}
+          onStartEditKnowledge={startEditKnowledge}
         />
         <section className="module-strip">
           <ModuleCard title="项目任务" text="项目、任务、看板入口已预留。" />

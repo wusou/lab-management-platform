@@ -1,3 +1,4 @@
+import type { SyntheticEvent } from "react";
 import { CalendarClock, CheckCircle2, Link as LinkIcon, Megaphone } from "lucide-react";
 import { meetingStatusText, notificationTypeText } from "../utils/helpers";
 import type { Meeting, NotificationItem } from "../types";
@@ -5,7 +6,6 @@ import type { Meeting, NotificationItem } from "../types";
 interface MeetingPanelProps {
   meetings: Meeting[];
   notifications: NotificationItem[];
-  selectedNotification: NotificationItem | null;
   setSelectedNotification: (v: NotificationItem | null) => void;
   unreadNotifications: NotificationItem[];
   canManageMeetings: boolean;
@@ -19,14 +19,14 @@ interface MeetingPanelProps {
   meetingSummary: string; setMeetingSummary: (v: string) => void;
   announcementTitle: string; setAnnouncementTitle: (v: string) => void;
   announcementContent: string; setAnnouncementContent: (v: string) => void;
-  onCreateMeeting: (e: React.SyntheticEvent<HTMLFormElement>) => void;
+  onCreateMeeting: (e: SyntheticEvent<HTMLFormElement>) => void;
   onCompleteMeeting: (meeting: Meeting) => void;
-  onPublishAnnouncement: (e: React.SyntheticEvent<HTMLFormElement>) => void;
+  onPublishAnnouncement: (e: SyntheticEvent<HTMLFormElement>) => void;
   onMarkNotificationRead: (n: NotificationItem) => void;
 }
 
 export function MeetingPanel({
-  meetings, notifications, selectedNotification, setSelectedNotification,
+  meetings, notifications, setSelectedNotification,
   unreadNotifications, canManageMeetings, loading,
   meetingTitle, setMeetingTitle, meetingStartsAt, setMeetingStartsAt,
   meetingEndsAt, setMeetingEndsAt, meetingLocation, setMeetingLocation,

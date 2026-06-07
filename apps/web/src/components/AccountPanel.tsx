@@ -1,3 +1,4 @@
+import type { SyntheticEvent } from "react";
 import { ClipboardList, KeyRound, ShieldCheck, Smartphone, Users } from "lucide-react";
 import { roleText, permissionLabels, rolePermissions, accountPreviewLimit } from "../utils/helpers";
 import type { Actor, ManagedUser, Role } from "../types";
@@ -24,9 +25,9 @@ interface AccountPanelProps {
   hasMoreUsers: boolean;
   showAllAccounts: boolean; setShowAllAccounts: (v: boolean) => void;
   showInactiveAccounts: boolean; setShowInactiveAccounts: (v: boolean) => void;
-  onUpdateContact: (e: React.SyntheticEvent<HTMLFormElement>) => void;
-  onChangePassword: (e: React.SyntheticEvent<HTMLFormElement>) => void;
-  onRegisterUser: (e: React.SyntheticEvent<HTMLFormElement>) => void;
+  onUpdateContact: (e: SyntheticEvent<HTMLFormElement>) => void;
+  onChangePassword: (e: SyntheticEvent<HTMLFormElement>) => void;
+  onRegisterUser: (e: SyntheticEvent<HTMLFormElement>) => void;
   onResetUserPassword: (user: ManagedUser) => void;
   onDeleteUser: (user: ManagedUser) => void;
   onUpdateUserRole: (user: ManagedUser, role: "admin" | "member") => void;

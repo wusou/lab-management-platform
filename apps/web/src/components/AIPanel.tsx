@@ -1,3 +1,4 @@
+import type { SyntheticEvent } from "react";
 import { BookOpen, Bot, HelpCircle, MessageCircle, Plus, Send, Trash2, Users, XCircle } from "lucide-react";
 import type { ChatMessage, FaqTemplate, KnowledgeDocument, KnowledgeSource } from "../types";
 
@@ -20,7 +21,7 @@ interface AIPanelProps {
   onClearAiHistory: () => void;
   onUseFaqTemplate: (question: string) => void;
   onLoadKnowledgeDocs: () => void;
-  onCreateKnowledgeDoc: (e: React.SyntheticEvent<HTMLFormElement>) => void;
+  onCreateKnowledgeDoc: (e: SyntheticEvent<HTMLFormElement>) => void;
   onUpdateKnowledgeDoc: (id: string) => void;
   onDeleteKnowledgeDoc: (id: string) => void;
   onStartEditKnowledge: (doc: KnowledgeDocument) => void;

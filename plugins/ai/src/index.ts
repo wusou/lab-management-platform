@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { PluginManifest } from "@lab/core";
 import { randomUUID } from "node:crypto";
 import pg from "pg";

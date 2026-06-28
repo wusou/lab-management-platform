@@ -2,14 +2,14 @@
 
 ## 环境概述
 
-| 项目 | 说明 |
-|------|------|
-| 虚拟机软件 | VMware Workstation |
-| 操作系统 | Ubuntu Server 22.04 LTS |
-| 数据库 | PostgreSQL 16 (Docker) |
-| 后端 | Fastify API (Node.js 22, Docker) |
-| 前端 | Vite + React (Docker) |
-| 测试账号 | admin/Admin@123456, student001/Student@123456 |
+| 项目       | 说明                                          |
+| ---------- | --------------------------------------------- |
+| 虚拟机软件 | VMware Workstation                            |
+| 操作系统   | Ubuntu Server 22.04 LTS                       |
+| 数据库     | PostgreSQL 16 (Docker)                        |
+| 后端       | Fastify API (Node.js 22, Docker)              |
+| 前端       | Vite + React (Docker)                         |
+| 测试账号   | admin/Admin@123456, student001/Student@123456 |
 
 ---
 
@@ -97,6 +97,7 @@ bash scripts/vm-manage.sh start
 ```
 
 脚本会自动完成：
+
 - ✅ 系统更新
 - ✅ 安装 Docker + Docker Compose
 - ✅ 配置防火墙（开放 5173 / 3000 / 22）
@@ -186,10 +187,10 @@ network:
   ethernets:
     ens33:
       dhcp4: no
-      addresses: [192.168.1.200/24]  # 固定 IP
+      addresses: [192.168.1.200/24] # 固定 IP
       routes:
         - to: default
-          via: 192.168.1.1          # 网关地址
+          via: 192.168.1.1 # 网关地址
       nameservers:
         addresses: [8.8.8.8, 114.114.114.114]
   version: 2
@@ -203,11 +204,11 @@ sudo netplan apply  # 立即生效
 
 ## 端口说明
 
-| 端口 | 服务 | 说明 |
-|------|------|------|
-| 22 | SSH | 远程连接 |
-| 5173 | Web 前端 | 浏览器访问 |
-| 3000 | API | 后端接口 |
-| 5432 | PostgreSQL | 数据库 |
+| 端口 | 服务       | 说明       |
+| ---- | ---------- | ---------- |
+| 22   | SSH        | 远程连接   |
+| 5173 | Web 前端   | 浏览器访问 |
+| 3000 | API        | 后端接口   |
+| 5432 | PostgreSQL | 数据库     |
 
 局域网内都可以通过 `虚拟机IP:5173` 访问。

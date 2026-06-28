@@ -791,9 +791,7 @@ class PostgresFaqTemplateRepository implements FaqTemplateRepository {
 
 // ── Row Mappers ────────────────────────────────────────
 
-function mapKnowledgeRow(
-  row: any | { [key: string]: unknown }
-): KnowledgeDocument {
+function mapKnowledgeRow(row: any | { [key: string]: unknown }): KnowledgeDocument {
   return {
     id: String(row.id),
     title: String(row.title),

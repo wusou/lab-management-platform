@@ -13,6 +13,7 @@ COPY plugins/files/package.json plugins/files/package.json
 COPY plugins/hello-world/package.json plugins/hello-world/package.json
 COPY plugins/inventory/package.json plugins/inventory/package.json
 COPY plugins/ai/package.json plugins/ai/package.json
+COPY plugins/projects/package.json plugins/projects/package.json
 RUN pnpm install --frozen-lockfile=false
 
 FROM deps AS dev

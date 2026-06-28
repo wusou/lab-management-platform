@@ -4,6 +4,7 @@ import { collaborationPlugin } from "@lab/plugin-collaboration";
 import { filesPlugin } from "@lab/plugin-files";
 import { helloWorldPlugin } from "@lab/plugin-hello-world";
 import { inventoryPlugin } from "@lab/plugin-inventory";
+import { projectsPlugin } from "@lab/plugin-projects";
 import { ConsoleLogger, createAuditAdapter } from "./adapters.js";
 
 export async function createKernel(): Promise<Kernel> {
@@ -27,6 +28,7 @@ export async function createKernel(): Promise<Kernel> {
   await kernel.register(filesPlugin);
   await kernel.register(collaborationPlugin);
   await kernel.register(aiPlugin);
+  await kernel.register(projectsPlugin);
 
   return kernel;
 }

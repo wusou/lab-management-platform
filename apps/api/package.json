@@ -19,6 +19,7 @@
     "@lab/plugin-hello-world": "workspace:*",
     "@lab/plugin-ai": "workspace:*",
     "@lab/plugin-inventory": "workspace:*",
+    "@lab/plugin-projects": "workspace:*",
     "fastify": "^5.1.0",
     "pg": "^8.16.3"
   },

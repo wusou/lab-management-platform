@@ -20,7 +20,8 @@
       "@lab/plugin-files": ["plugins/files/src/index.ts"],
       "@lab/plugin-hello-world": ["plugins/hello-world/src/index.ts"],
       "@lab/plugin-inventory": ["plugins/inventory/src/index.ts"],
-      "@lab/plugin-ai": ["plugins/ai/src/index.ts"]
+      "@lab/plugin-ai": ["plugins/ai/src/index.ts"],
+      "@lab/plugin-projects": ["plugins/projects/src/index.ts"]
     }
   }
 }

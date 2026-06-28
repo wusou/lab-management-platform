@@ -28,49 +28,54 @@ export function statusText(status: ApplicationStatus) {
   }[status];
 }
 
-export function roleText(role: Role) {
-  return {
+export function roleText(role: Role): string {
+  const map: Record<Role, string> = {
     super_admin: "超级管理员",
     admin: "管理员",
     member: "成员"
-  }[role];
+  };
+  return map[role];
 }
 
-export function fileCategoryText(category: FileCategory) {
-  return {
+export function fileCategoryText(category: FileCategory): string {
+  const map: Record<FileCategory, string> = {
     sop: "SOP",
     template: "模板",
     record: "记录",
     dataset: "数据集",
     meeting: "会议",
     other: "其他"
-  }[category];
+  };
+  return map[category];
 }
 
-export function visibilityText(visibility: FileVisibility) {
-  return {
+export function visibilityText(visibility: FileVisibility): string {
+  const map: Record<FileVisibility, string> = {
     public: "公开",
     group: "课题组可见",
     private: "仅自己可见"
-  }[visibility];
+  };
+  return map[visibility];
 }
 
-export function meetingStatusText(status: MeetingStatus) {
-  return {
+export function meetingStatusText(status: MeetingStatus): string {
+  const map: Record<MeetingStatus, string> = {
     scheduled: "已预约",
     completed: "已完成",
     cancelled: "已取消"
-  }[status];
+  };
+  return map[status];
 }
 
-export function notificationTypeText(type: NotificationType) {
-  return {
+export function notificationTypeText(type: NotificationType): string {
+  const map: Record<NotificationType, string> = {
     announcement: "公告",
     meeting: "会议",
     approval: "审批",
     task: "任务",
     system: "系统"
-  }[type];
+  };
+  return map[type];
 }
 
 export function formatFileSize(sizeBytes?: number) {

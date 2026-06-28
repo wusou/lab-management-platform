@@ -1279,7 +1279,6 @@ export function App() {
         <MeetingPanel
           meetings={meetings}
           notifications={notifications}
-          selectedNotification={selectedNotification}
           setSelectedNotification={setSelectedNotification}
           unreadNotifications={unreadNotifications}
           canManageMeetings={canManageMeetings}

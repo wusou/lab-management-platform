@@ -16,7 +16,7 @@
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "test": "vitest run",
-    "typecheck": "tsc -b --pretty false",
+    "typecheck": "tsc -b packages/core packages/contracts plugins/hello-world plugins/inventory plugins/files plugins/collaboration plugins/ai plugins/projects apps/api --pretty false",
     "db:migrate": "corepack pnpm --filter @lab/api db:migrate",
     "ci": "corepack pnpm format:check && corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test && corepack pnpm build",
     "prepare": "husky"

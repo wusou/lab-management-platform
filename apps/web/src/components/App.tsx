@@ -1,4 +1,4 @@
-import { Bell, LogOut, XCircle } from "lucide-react";
+import { Bell, FileText, LogOut, XCircle } from "lucide-react";
 import type { SyntheticEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LoginForm } from "./LoginForm";
@@ -8,6 +8,7 @@ import { FilePanel } from "./FilePanel";
 import { MeetingPanel } from "./MeetingPanel";
 import { AccountPanel } from "./AccountPanel";
 import { AIPanel } from "./AIPanel";
+import { ProjectsPanel } from "./ProjectsPanel";
 import { ModuleCard } from "./Shared";
 
 import type {
@@ -73,6 +74,10 @@ export function App() {
   const [message, setMessage] = useState("请登录后开始使用。");
   const [showToast, setShowToast] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resetMode, setResetMode] = useState(false);
+  const [resetIdentifier, setResetIdentifier] = useState("");
+  const [resetPhone, setResetPhone] = useState("");
+  const [resetResult, setResetResult] = useState("");
   const [registerUsername, setRegisterUsername] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerStudentId, setRegisterStudentId] = useState("");
@@ -134,9 +139,22 @@ export function App() {
   const [editingKnowledgeId, setEditingKnowledgeId] = useState("");
   const [showKnowledgePanel, setShowKnowledgePanel] = useState(false);
   const [aiActiveTab, setAiActiveTab] = useState<"chat" | "knowledge">("chat");
+  const [projectList, setProjectList] = useState<Array<{id:string;name:string;description:string;ownerId:string;ownerName:string;status:string;startsAt?:string;endsAt?:string;createdAt:string}>>([]);
+  const [projectTasks, setProjectTasks] = useState<Array<{id:string;projectId:string;title:string;description:string;assigneeId?:string;assigneeName?:string;priority:string;status:string;dueDate?:string}>>([]);
+  const [projectProgress, setProjectProgress] = useState<Array<{id:string;projectId:string;authorId:string;authorName:string;title:string;content:string;createdAt:string}>>([]);
+  const [projectMembers, setProjectMembers] = useState<Array<{userId:string;userName:string;memberRole:string;joinedAt:string}>>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectDesc, setNewProjectDesc] = useState("");
+  const [progressTitle, setProgressTitle] = useState("");
+  const [progressContent, setProgressContent] = useState("");
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskAssignee, setTaskAssignee] = useState("");
+  const [taskPriority, setTaskPriority] = useState("medium");
   const didMountToast = useRef(false);
 
-  const canApprove = actor?.permissions.includes("inventory:write") ?? false;
+  const canApprove = actor?.permissions.includes("inventory:approve") ?? false;
+  const canStock = actor?.permissions.includes("inventory:stock") ?? false;
   const canManageUsers = actor?.permissions.includes("user:write") ?? false;
   const canManageFiles = actor?.permissions.includes("file:write") ?? false;
   const canManageMeetings = actor?.permissions.includes("meeting:write") ?? false;
@@ -177,6 +195,121 @@ export function App() {
       await loadProfile(payload.token);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "登录失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ── Project handlers ──────────────────────────────────
+  async function loadProjects() {
+    if (!token) return;
+    try {
+      const r = await fetch(`${apiBase}/projects`, { headers: headers() });
+      if (!r.ok) { console.error("loadProjects failed:", r.status); return; }
+      const data = await r.json();
+      setProjectList(data);
+    } catch (e) { console.error("loadProjects error:", e); }
+  }
+
+  async function loadProjectData(projectId: string) {
+    if (!token || !projectId) { setProjectTasks([]); setProjectProgress([]); setProjectMembers([]); return; }
+    try {
+      const [tR, pR, mR] = await Promise.all([
+        fetch(`${apiBase}/projects/${projectId}/tasks`, { headers: headers() }),
+        fetch(`${apiBase}/projects/${projectId}/progress`, { headers: headers() }),
+        fetch(`${apiBase}/projects/${projectId}/members`, { headers: headers() }),
+      ]);
+      if (tR.ok) setProjectTasks(await tR.json());
+      if (pR.ok) setProjectProgress(await pR.json());
+      if (mR.ok) setProjectMembers(await mR.json());
+    } catch {}
+  }
+
+  async function handleCreateProject(e: SyntheticEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!newProjectName.trim()) return;
+    setLoading(true);
+    try {
+      await fetch(`${apiBase}/projects`, {
+        method: "POST", headers: headers(),
+        body: JSON.stringify({ name: newProjectName, description: newProjectDesc })
+      });
+      setNewProjectName(""); setNewProjectDesc("");
+      await loadProjects();
+    } catch {} finally { setLoading(false); }
+  }
+
+  async function handleUploadProgress(e: SyntheticEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!selectedProjectId || !progressTitle.trim()) return;
+    setLoading(true);
+    try {
+      await fetch(`${apiBase}/projects/${selectedProjectId}/progress`, {
+        method: "POST", headers: headers(),
+        body: JSON.stringify({ title: progressTitle, content: progressContent })
+      });
+      setProgressTitle(""); setProgressContent("");
+      await loadProjectData(selectedProjectId);
+    } catch {} finally { setLoading(false); }
+  }
+
+  async function handleCreateTask(e: SyntheticEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!selectedProjectId || !taskTitle.trim()) return;
+    setLoading(true);
+    try {
+      await fetch(`${apiBase}/projects/${selectedProjectId}/tasks`, {
+        method: "POST", headers: headers(),
+        body: JSON.stringify({ title: taskTitle, assigneeId: taskAssignee || undefined, priority: taskPriority })
+      });
+      setTaskTitle(""); setTaskAssignee("");
+      await loadProjectData(selectedProjectId);
+    } catch {} finally { setLoading(false); }
+  }
+
+  async function handleApproveProject(projectId: string) {
+    try {
+      await fetch(`${apiBase}/projects/${projectId}`, {
+        method: "PATCH", headers: headers(),
+        body: JSON.stringify({ status: "active" })
+      });
+      await loadProjects();
+      if (selectedProjectId === projectId) loadProjectData(projectId);
+    } catch {}
+  }
+
+  async function handleCompleteTask(taskId: string) {
+    try {
+      await fetch(`${apiBase}/projects/${selectedProjectId}/tasks/${taskId}`, {
+        method: "PATCH", headers: headers(),
+        body: JSON.stringify({ status: "done" })
+      });
+      await loadProjectData(selectedProjectId);
+    } catch {}
+  }
+
+  // Init project data
+  useEffect(() => { if (token) loadProjects(); }, [token]);
+  useEffect(() => { if (selectedProjectId) loadProjectData(selectedProjectId); }, [selectedProjectId, token]);
+
+  async function handleForgotPassword(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoading(true);
+    setResetResult("");
+    try {
+      const response = await fetch(`${apiBase}/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier: resetIdentifier, phone: resetPhone })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        setResetResult(payload.error ?? "验证失败，请检查信息后重试。");
+      } else {
+        setResetResult(`密码已重置，新密码: ${payload.newPassword}。请返回登录页面使用新密码登录，登录后请尽快修改密码。`);
+      }
+    } catch {
+      setResetResult("服务暂不可用，请联系实验室管理员。");
     } finally {
       setLoading(false);
     }
@@ -348,6 +481,9 @@ export function App() {
       loadNotifications(token).catch(() => {
         // Notification refresh is best-effort for background updates.
       });
+      loadProjects().catch(() => {
+        // Project refresh is best-effort for background updates.
+      });
     };
     refresh();
     const eventSource = new EventSource(`${apiBase}/events?token=${encodeURIComponent(token)}`);
@@ -468,7 +604,8 @@ export function App() {
         body: JSON.stringify({
           materialId: selectedMaterialId,
           quantity,
-          reason
+          reason,
+          projectId: selectedProjectId || undefined
         })
       });
 
@@ -723,6 +860,7 @@ export function App() {
           visibility: fileVisibility,
           driveUrl: fileDriveUrl || undefined,
           description: fileDescription,
+          projectId: selectedProjectId || undefined,
           originalName: fileUploadName || undefined,
           mimeType: fileUploadMimeType || undefined,
           sizeBytes: fileUploadSize || undefined,
@@ -898,7 +1036,8 @@ export function App() {
             .split(",")
             .map((item) => item.trim())
             .filter(Boolean),
-          summary: meetingSummary
+          summary: meetingSummary,
+          projectId: selectedProjectId || undefined
         })
       });
       const payload = await response.json();
@@ -1176,7 +1315,15 @@ export function App() {
         setPassword={setPassword}
         loading={loading}
         message={message}
+        resetMode={resetMode}
+        setResetMode={setResetMode}
+        resetIdentifier={resetIdentifier}
+        setResetIdentifier={setResetIdentifier}
+        resetPhone={resetPhone}
+        setResetPhone={setResetPhone}
+        resetResult={resetResult}
         onSubmit={login}
+        onResetPassword={handleForgotPassword}
       />
     );
   }
@@ -1197,6 +1344,19 @@ export function App() {
           <div>
             <p className="eyebrow">今日实验室运营</p>
             <h1>耗材申请与审批工作台</h1>
+            <label className="project-context">
+              当前项目：
+              <select value={selectedProjectId} onChange={(e) => {
+                setSelectedProjectId(e.target.value);
+                if (e.target.value) loadProjectData(e.target.value);
+              }}>
+                {actor?.role !== "student" ? <option value="">全部视角</option> : null}
+                {projectList.length === 0 ? <option value="">暂无项目</option> : null}
+                {projectList.map((p) => (
+                  <option key={p.id} value={p.id}>{p.status === "pending" ? "⏳ " : ""}{p.name}</option>
+                ))}
+              </select>
+            </label>
           </div>
           <div className="top-actions">
             <button className="notice notice-button" type="button" onClick={scrollToNotifications}>
@@ -1222,6 +1382,7 @@ export function App() {
           setReason={setReason}
           loading={loading}
           canApprove={canApprove}
+          canStock={canStock}
           stockInQuantity={stockInQuantity}
           setStockInQuantity={setStockInQuantity}
           displayedApplications={displayedApplications}
@@ -1380,6 +1541,36 @@ export function App() {
           onDeleteKnowledgeDoc={deleteKnowledgeDoc}
           onStartEditKnowledge={startEditKnowledge}
         />
+        <ProjectsPanel
+          projects={projectList}
+          selectedProjectId={selectedProjectId}
+          setSelectedProjectId={setSelectedProjectId}
+          tasks={projectTasks}
+          progressReports={projectProgress}
+          members={projectMembers}
+          role={actor?.role ?? "student"}
+          loading={loading}
+          newProjectName={newProjectName}
+          setNewProjectName={setNewProjectName}
+          newProjectDesc={newProjectDesc}
+          setNewProjectDesc={setNewProjectDesc}
+          progressTitle={progressTitle}
+          setProgressTitle={setProgressTitle}
+          progressContent={progressContent}
+          setProgressContent={setProgressContent}
+          taskTitle={taskTitle}
+          setTaskTitle={setTaskTitle}
+          taskAssignee={taskAssignee}
+          setTaskAssignee={setTaskAssignee}
+          taskPriority={taskPriority}
+          setTaskPriority={setTaskPriority}
+          onCreateProject={handleCreateProject}
+          onApproveProject={handleApproveProject}
+          onUploadProgress={handleUploadProgress}
+          onCreateTask={handleCreateTask}
+          onCompleteTask={handleCompleteTask}
+        />
+
         <section className="module-strip">
           <ModuleCard title="项目任务" text="项目、任务、看板入口已预留。" />
           <ModuleCard title="AI 智能问答" text="基于 LLM + RAG，支持知识库问答和对话。" />

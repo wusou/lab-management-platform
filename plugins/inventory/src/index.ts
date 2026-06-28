@@ -46,6 +46,7 @@ interface InventoryApplicationRequest {
   materialId: string;
   quantity: number;
   reason?: string;
+  projectId?: string;
 }
 
 interface ReviewRequest {
@@ -73,6 +74,7 @@ interface InventoryRepository {
     materialId: string;
     quantity: number;
     reason?: string;
+    projectId?: string;
   }): Promise<InventoryApplication | { error: string; status: number }>;
   approveApplication(
     id: string,
@@ -324,6 +326,7 @@ class PostgresInventoryRepository implements InventoryRepository {
         material_name TEXT NOT NULL,
         applicant_id TEXT NOT NULL,
         applicant_name TEXT NOT NULL,
+        project_id TEXT,
         quantity INTEGER NOT NULL CHECK (quantity > 0),
         reason TEXT NOT NULL,
         status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected')),
@@ -331,6 +334,7 @@ class PostgresInventoryRepository implements InventoryRepository {
         reviewed_at TIMESTAMPTZ,
         review_remark TEXT
       );
+      ALTER TABLE inventory.application ADD COLUMN IF NOT EXISTS project_id TEXT;
 
       CREATE TABLE IF NOT EXISTS inventory.application_review (
         id TEXT PRIMARY KEY,
@@ -511,8 +515,8 @@ class PostgresInventoryRepository implements InventoryRepository {
 
       const inserted = await client.query(
         `INSERT INTO inventory.application
-          (id, material_id, material_name, applicant_id, applicant_name, quantity, reason, status, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          (id, material_id, material_name, applicant_id, applicant_name, project_id, quantity, reason, status, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING *`,
         [
           application.id,
@@ -520,6 +524,7 @@ class PostgresInventoryRepository implements InventoryRepository {
           application.materialName,
           application.applicantId,
           application.applicantName,
+          application.projectId ?? null,
           application.quantity,
           application.reason,
           application.status,
@@ -775,19 +780,19 @@ export const inventoryPlugin: PluginManifest = {
     {
       method: "PATCH",
       path: "/inventory/materials/:id/stock-in",
-      permission: "inventory:write",
+      permission: "inventory:stock",
       summary: "管理员登记耗材入库"
     },
     {
       method: "PATCH",
       path: "/inventory/applications/:id/approve",
-      permission: "inventory:write",
+      permission: "inventory:approve",
       summary: "管理员批准耗材申请"
     },
     {
       method: "PATCH",
       path: "/inventory/applications/:id/reject",
-      permission: "inventory:write",
+      permission: "inventory:approve",
       summary: "管理员拒绝耗材申请"
     }
   ],
@@ -822,8 +827,13 @@ export const inventoryPlugin: PluginManifest = {
           method: "GET",
           path: "/inventory/applications",
           permission: "inventory:read",
-          summary: "获取耗材申请列表",
-          handler: async () => ({ body: await repository.listApplications() })
+          summary: "获取耗材申请列表（可按项目筛选）",
+          handler: async ({ query }) => {
+            const all = await repository.listApplications();
+            const projectId = (query as any)?.projectId as string | undefined;
+            if (projectId) return { body: all.filter((a: any) => a.project_id === projectId || !a.project_id) };
+            return { body: all };
+          }
         },
         {
           method: "GET",
@@ -854,7 +864,8 @@ export const inventoryPlugin: PluginManifest = {
               actorId: actor.id,
               materialId: request.materialId,
               quantity: request.quantity,
-              reason: request.reason
+              reason: request.reason,
+              projectId: request.projectId
             });
             if (isRepositoryError(application)) {
               return { status: application.status, body: { error: application.error } };
@@ -892,7 +903,7 @@ export const inventoryPlugin: PluginManifest = {
         {
           method: "PATCH",
           path: "/inventory/materials/:id/stock-in",
-          permission: "inventory:write",
+          permission: "inventory:stock",
           summary: "管理员登记耗材入库",
           handler: async ({ actor, params, body }) => {
             if (!actor) {
@@ -932,7 +943,7 @@ export const inventoryPlugin: PluginManifest = {
         {
           method: "PATCH",
           path: "/inventory/applications/:id/approve",
-          permission: "inventory:write",
+          permission: "inventory:approve",
           summary: "管理员批准耗材申请",
           handler: async ({ actor, params, body }) => {
             if (!actor) {
@@ -976,7 +987,7 @@ export const inventoryPlugin: PluginManifest = {
         {
           method: "PATCH",
           path: "/inventory/applications/:id/reject",
-          permission: "inventory:write",
+          permission: "inventory:approve",
           summary: "管理员拒绝耗材申请",
           handler: async ({ actor, params, body }) => {
             if (!actor) {

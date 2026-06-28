@@ -210,6 +210,8 @@ class PostgresCollaborationRepository implements CollaborationRepository {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       );
+      ALTER TABLE collaboration.meeting ADD COLUMN IF NOT EXISTS project_id TEXT;
+      ALTER TABLE collaboration.notification ADD COLUMN IF NOT EXISTS project_id TEXT;
 
       CREATE TABLE IF NOT EXISTS collaboration.notification (
         id TEXT PRIMARY KEY,

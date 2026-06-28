@@ -10,11 +10,28 @@ import type {
 } from "./contracts.js";
 
 const rolePermissions: Record<Role, Permission[]> = {
-  super_admin: [
+  lab_admin: [
     "user:read",
     "user:write",
     "inventory:read",
-    "inventory:write",
+    "inventory:apply",
+    "inventory:approve",
+    "inventory:stock",
+    "file:read",
+    "file:write",
+    "project:read",
+    "project:write",
+    "project:progress",
+    "meeting:read",
+    "meeting:write",
+    "ai:use",
+    "ai:manage"
+  ],
+  professor: [
+    "user:read",
+    "inventory:read",
+    "inventory:apply",
+    "inventory:approve",
     "file:read",
     "file:write",
     "project:read",
@@ -23,20 +40,14 @@ const rolePermissions: Record<Role, Permission[]> = {
     "meeting:write",
     "ai:use"
   ],
-  admin: [
-    "user:read",
-    "user:write",
+  student: [
     "inventory:read",
-    "inventory:write",
+    "inventory:apply",
     "file:read",
-    "file:write",
     "project:read",
-    "project:write",
     "meeting:read",
-    "meeting:write",
     "ai:use"
-  ],
-  member: ["inventory:read", "file:read", "project:read", "meeting:read", "ai:use"]
+  ]
 };
 
 interface DemoUser {
@@ -55,15 +66,23 @@ const demoUsers: DemoUser[] = [
     username: "admin",
     studentId: "T000001",
     displayName: "实验室管理员",
-    role: "admin" as const,
+    role: "lab_admin" as const,
     password: "Admin@123456"
+  },
+  {
+    id: "u-prof001",
+    username: "professor",
+    studentId: "T000002",
+    displayName: "张教授",
+    role: "professor" as const,
+    password: "Professor@123456"
   },
   {
     id: "u-student001",
     username: "student001",
     studentId: "S000001",
     displayName: "学生一号",
-    role: "member" as const,
+    role: "student" as const,
     password: "Student@123456"
   }
 ];
@@ -249,7 +268,7 @@ export class DemoAuthAdapter implements AuthPort {
 
   async updateUserRole(
     targetUserId: string,
-    role: Exclude<Role, "super_admin">
+    role: Role
   ): Promise<ManagedUser> {
     if (!["admin", "member"].includes(role)) {
       throw new Error("role must be admin or member");
@@ -311,7 +330,7 @@ export class PostgresAuthAdapter implements AuthPort {
         student_id TEXT UNIQUE,
         password_hash TEXT NOT NULL,
         display_name TEXT NOT NULL,
-        role TEXT NOT NULL CHECK (role IN ('super_admin', 'admin', 'member')),
+        role TEXT NOT NULL CHECK (role IN ('student', 'professor', 'lab_admin')),
         identity_provider TEXT NOT NULL DEFAULT 'local',
         external_subject TEXT,
         active BOOLEAN NOT NULL DEFAULT true,
@@ -322,6 +341,13 @@ export class PostgresAuthAdapter implements AuthPort {
       ALTER TABLE core.app_user ADD COLUMN IF NOT EXISTS student_id TEXT UNIQUE;
       ALTER TABLE core.app_user ADD COLUMN IF NOT EXISTS identity_provider TEXT NOT NULL DEFAULT 'local';
       ALTER TABLE core.app_user ADD COLUMN IF NOT EXISTS external_subject TEXT;
+
+      -- Migration: update role system (drop old constraint first!)
+      ALTER TABLE core.app_user DROP CONSTRAINT IF EXISTS app_user_role_check;
+      UPDATE core.app_user SET role = 'lab_admin' WHERE role IN ('super_admin', 'admin');
+      UPDATE core.app_user SET role = 'student' WHERE role = 'member';
+      ALTER TABLE core.app_user ADD CONSTRAINT app_user_role_check
+        CHECK (role IN ('student', 'professor', 'lab_admin'));
 
       CREATE TABLE IF NOT EXISTS core.session (
         token TEXT PRIMARY KEY,
@@ -339,7 +365,11 @@ export class PostgresAuthAdapter implements AuthPort {
       await this.pool.query(
         `INSERT INTO core.app_user (id, username, student_id, password_hash, display_name, role)
          VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (username) DO NOTHING`,
+         ON CONFLICT (username) DO UPDATE SET
+           role = EXCLUDED.role,
+           display_name = EXCLUDED.display_name,
+           student_id = EXCLUDED.student_id,
+           password_hash = EXCLUDED.password_hash`,
         [
           user.id,
           user.username,
@@ -595,7 +625,7 @@ export class PostgresAuthAdapter implements AuthPort {
 
   async updateUserRole(
     targetUserId: string,
-    role: Exclude<Role, "super_admin">
+    role: Role
   ): Promise<ManagedUser> {
     if (!["admin", "member"].includes(role)) {
       throw new Error("role must be admin or member");

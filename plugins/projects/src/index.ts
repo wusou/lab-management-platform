@@ -5,7 +5,7 @@ import pg from "pg";
 
 // ── Types ──────────────────────────────────────────────
 
-type ProjectStatus = "active" | "archived" | "completed";
+type ProjectStatus = "pending" | "active" | "archived" | "completed";
 type TaskStatus = "todo" | "in_progress" | "review" | "done";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
 
@@ -15,7 +15,6 @@ interface Project {
   description: string;
   ownerId: string;
   ownerName: string;
-  memberIds: string[];
   startsAt?: string;
   endsAt?: string;
   status: ProjectStatus;
@@ -50,7 +49,6 @@ interface TaskComment {
 interface ProjectCreateRequest {
   name: string;
   description?: string;
-  memberIds?: string[];
   startsAt?: string;
   endsAt?: string;
 }
@@ -58,7 +56,6 @@ interface ProjectCreateRequest {
 interface ProjectUpdateRequest {
   name?: string;
   description?: string;
-  memberIds?: string[];
   startsAt?: string;
   endsAt?: string;
   status?: ProjectStatus;
@@ -85,6 +82,27 @@ interface CommentCreateRequest {
   content: string;
 }
 
+type MemberRole = "leader" | "member" | "advisor" | "manager";
+
+interface ProjectMember {
+  projectId: string;
+  userId: string;
+  userName?: string;
+  memberRole: MemberRole;
+  joinedAt: string;
+}
+
+interface ProgressReport {
+  id: string;
+  projectId: string;
+  authorId: string;
+  authorName: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ── Repository Interface ───────────────────────────────
 
 interface ProjectRepository {
@@ -104,6 +122,11 @@ interface ProjectRepository {
   ): Promise<ProjectTask | null>;
   listComments(taskId: string): Promise<TaskComment[]>;
   createComment(input: Omit<TaskComment, "id" | "createdAt">): Promise<TaskComment>;
+  listMemberProjectIds(userId: string): Promise<Set<string>>;
+  addMember(projectId: string, userId: string, userName: string, memberRole: string): Promise<void>;
+  listMembers(projectId: string): Promise<ProjectMember[]>;
+  listProgress(projectId: string): Promise<ProgressReport[]>;
+  createProgress(projectId: string, authorId: string, authorName: string, title: string, content: string): Promise<ProgressReport>;
 }
 
 // ── Seed Data ──────────────────────────────────────────
@@ -113,9 +136,8 @@ const seedProjects: Project[] = [
     id: "proj-001",
     name: "细胞培养条件优化",
     description: "探究不同培养基配方对Hela细胞生长速率的影响，建立最优培养方案。",
-    ownerId: "u-admin",
-    ownerName: "实验室管理员",
-    memberIds: ["u-admin", "demo-member"],
+    ownerId: "u-prof001",
+    ownerName: "张教授",
     startsAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
     endsAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 23).toISOString(),
     status: "active",
@@ -124,14 +146,19 @@ const seedProjects: Project[] = [
   }
 ];
 
+const seedMembers: ProjectMember[] = [
+  { projectId: "proj-001", userId: "u-prof001", userName: "张教授", memberRole: "manager", joinedAt: new Date().toISOString() },
+  { projectId: "proj-001", userId: "u-student001", userName: "学生一号", memberRole: "leader", joinedAt: new Date().toISOString() },
+];
+
 const seedTasks: ProjectTask[] = [
   {
     id: "task-001",
     projectId: "proj-001",
     title: "培养基配方文献调研",
     description: "查阅近3年关于Hela细胞培养的文献，汇总5种以上优化方案。",
-    assigneeId: "demo-member",
-    assigneeName: "成员 demo-member",
+    assigneeId: "u-student001",
+    assigneeName: "学生一号",
     priority: "high",
     status: "in_progress",
     dueDate: new Date(Date.now() + 1000 * 60 * 60 * 24 * 3).toISOString(),
@@ -143,8 +170,8 @@ const seedTasks: ProjectTask[] = [
     projectId: "proj-001",
     title: "配制3组测试培养基",
     description: "根据文献调研结果，配制3组不同血清浓度的测试培养基。",
-    assigneeId: "demo-member",
-    assigneeName: "成员 demo-member",
+    assigneeId: "u-student001",
+    assigneeName: "学生一号",
     priority: "medium",
     status: "todo",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
@@ -158,6 +185,7 @@ class MemoryProjectRepository implements ProjectRepository {
   private readonly projects = structuredClone(seedProjects);
   private readonly tasks = structuredClone(seedTasks);
   private readonly comments: TaskComment[] = [];
+  private readonly members = structuredClone(seedMembers);
 
   async initialize(): Promise<void> {
     return Promise.resolve();
@@ -238,6 +266,39 @@ class MemoryProjectRepository implements ProjectRepository {
     this.comments.unshift(comment);
     return comment;
   }
+
+  async listMemberProjectIds(userId: string): Promise<Set<string>> {
+    return new Set(
+      this.members
+        .filter((m) => m.userId === userId)
+        .map((m) => m.projectId)
+    );
+  }
+
+  async addMember(projectId: string, userId: string, userName: string, memberRole: string): Promise<void> {
+    if (!this.members.some((m) => m.projectId === projectId && m.userId === userId)) {
+      this.members.push({ projectId, userId, userName, memberRole, joinedAt: new Date().toISOString() });
+    }
+  }
+
+  async listMembers(projectId: string): Promise<ProjectMember[]> {
+    return this.members.filter((m) => m.projectId === projectId);
+  }
+
+  private readonly progressReports: ProgressReport[] = [];
+
+  async listProgress(projectId: string): Promise<ProgressReport[]> {
+    return this.progressReports.filter((r) => r.projectId === projectId);
+  }
+
+  async createProgress(projectId: string, authorId: string, authorName: string, title: string, content: string): Promise<ProgressReport> {
+    const report: ProgressReport = {
+      id: randomUUID(), projectId, authorId, authorName, title, content,
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+    };
+    this.progressReports.unshift(report);
+    return report;
+  }
 }
 
 // ── PostgreSQL Repository ──────────────────────────────
@@ -259,10 +320,37 @@ class PostgresProjectRepository implements ProjectRepository {
         description TEXT NOT NULL DEFAULT '',
         owner_id TEXT NOT NULL,
         owner_name TEXT NOT NULL DEFAULT '',
-        member_ids TEXT[] NOT NULL DEFAULT '{}',
         starts_at TIMESTAMPTZ,
         ends_at TIMESTAMPTZ,
-        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived', 'completed')),
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'archived', 'completed')),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
+      -- Migration: drop old member_ids column if exists
+      ALTER TABLE projects.project DROP COLUMN IF EXISTS member_ids;
+
+      -- Migration: update project status constraint
+      ALTER TABLE projects.project DROP CONSTRAINT IF EXISTS project_status_check;
+      ALTER TABLE projects.project ADD CONSTRAINT project_status_check
+        CHECK (status IN ('pending', 'active', 'archived', 'completed'));
+
+      CREATE TABLE IF NOT EXISTS projects.project_member (
+        project_id TEXT NOT NULL REFERENCES projects.project(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL,
+        user_name TEXT NOT NULL DEFAULT '',
+        member_role TEXT NOT NULL DEFAULT 'member' CHECK (member_role IN ('leader','member','advisor','manager')),
+        joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (project_id, user_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS projects.progress_report (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects.project(id) ON DELETE CASCADE,
+        author_id TEXT NOT NULL,
+        author_name TEXT NOT NULL DEFAULT '',
+        title TEXT NOT NULL,
+        content TEXT NOT NULL DEFAULT '',
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       );
@@ -303,15 +391,14 @@ class PostgresProjectRepository implements ProjectRepository {
     if (Number(count.rows[0]?.count ?? 0) === 0) {
       for (const project of seedProjects) {
         await this.pool.query(
-          `INSERT INTO projects.project (id, name, description, owner_id, owner_name, member_ids, starts_at, ends_at, status, created_at, updated_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+          `INSERT INTO projects.project (id, name, description, owner_id, owner_name, starts_at, ends_at, status, created_at, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
           [
             project.id,
             project.name,
             project.description,
             project.ownerId,
             project.ownerName,
-            project.memberIds,
             project.startsAt ?? null,
             project.endsAt ?? null,
             project.status,
@@ -340,6 +427,14 @@ class PostgresProjectRepository implements ProjectRepository {
         );
       }
     }
+    // Always ensure seed members exist (project_member may be empty on upgrade)
+    for (const member of seedMembers) {
+      await this.pool.query(
+        `INSERT INTO projects.project_member (project_id, user_id, user_name, member_role)
+         VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+        [member.projectId, member.userId, member.userName, member.memberRole]
+      );
+    }
   }
 
   async listProjects(): Promise<Project[]> {
@@ -355,15 +450,14 @@ class PostgresProjectRepository implements ProjectRepository {
   async createProject(input: Omit<Project, "id" | "createdAt" | "updatedAt">): Promise<Project> {
     const id = randomUUID();
     const r = await this.pool.query(
-      `INSERT INTO projects.project (id, name, description, owner_id, owner_name, member_ids, starts_at, ends_at, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      `INSERT INTO projects.project (id, name, description, owner_id, owner_name, starts_at, ends_at, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
       [
         id,
         input.name,
         input.description,
         input.ownerId,
         input.ownerName,
-        input.memberIds,
         input.startsAt ?? null,
         input.endsAt ?? null,
         input.status
@@ -468,6 +562,59 @@ class PostgresProjectRepository implements ProjectRepository {
     return r.rows.map(mapCommentRow);
   }
 
+  async listMemberProjectIds(userId: string): Promise<Set<string>> {
+    const r = await this.pool.query(
+      "SELECT project_id FROM projects.project_member WHERE user_id = $1",
+      [userId]
+    );
+    return new Set(r.rows.map((row: any) => row.project_id));
+  }
+
+  async addMember(projectId: string, userId: string, userName: string, memberRole: string): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO projects.project_member (project_id, user_id, user_name, member_role)
+       VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+      [projectId, userId, userName, memberRole]
+    );
+  }
+
+  async listMembers(projectId: string): Promise<ProjectMember[]> {
+    const r = await this.pool.query(
+      "SELECT project_id, user_id, user_name, member_role, joined_at FROM projects.project_member WHERE project_id = $1",
+      [projectId]
+    );
+    return r.rows.map((row: any) => ({
+      projectId: row.project_id, userId: row.user_id, userName: row.user_name,
+      memberRole: row.member_role, joinedAt: String(row.joined_at)
+    }));
+  }
+
+  async listProgress(projectId: string): Promise<ProgressReport[]> {
+    const r = await this.pool.query(
+      "SELECT * FROM projects.progress_report WHERE project_id = $1 ORDER BY created_at DESC",
+      [projectId]
+    );
+    return r.rows.map((row: any) => ({
+      id: row.id, projectId: row.project_id, authorId: row.author_id,
+      authorName: row.author_name, title: row.title, content: row.content,
+      createdAt: String(row.created_at), updatedAt: String(row.updated_at)
+    }));
+  }
+
+  async createProgress(projectId: string, authorId: string, authorName: string, title: string, content: string): Promise<ProgressReport> {
+    const r = await this.pool.query(
+      `INSERT INTO projects.progress_report (id, project_id, author_id, author_name, title, content)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [randomUUID(), projectId, authorId, authorName, title, content]
+    );
+    const row = r.rows[0];
+    return {
+      id: row.id, projectId: row.project_id, authorId: row.author_id,
+      authorName: row.author_name, title: row.title, content: row.content,
+      createdAt: String(row.created_at), updatedAt: String(row.updated_at)
+    };
+  }
+
   async createComment(input: Omit<TaskComment, "id" | "createdAt">): Promise<TaskComment> {
     const id = randomUUID();
     const r = await this.pool.query(
@@ -488,7 +635,6 @@ function mapProjectRow(row: Record<string, unknown>): Project {
     description: String(row.description),
     ownerId: String(row.owner_id),
     ownerName: String(row.owner_name),
-    memberIds: Array.isArray(row.member_ids) ? row.member_ids.map(String) : [],
     startsAt: row.starts_at ? new Date(String(row.starts_at)).toISOString() : undefined,
     endsAt: row.ends_at ? new Date(String(row.ends_at)).toISOString() : undefined,
     status: row.status as ProjectStatus,
@@ -551,6 +697,9 @@ export const projectsPlugin: PluginManifest = {
     { method: "GET", path: "/projects/:id", permission: "project:read", summary: "获取项目详情" },
     { method: "POST", path: "/projects", permission: "project:write", summary: "创建项目" },
     { method: "PATCH", path: "/projects/:id", permission: "project:write", summary: "更新项目" },
+    { method: "GET", path: "/projects/:id/members", permission: "project:read", summary: "获取项目成员" },
+    { method: "GET", path: "/projects/:id/progress", permission: "project:read", summary: "获取进度报告" },
+    { method: "POST", path: "/projects/:id/progress", permission: "project:progress", summary: "上传进度报告" },
     {
       method: "GET",
       path: "/projects/:id/tasks",
@@ -602,8 +751,13 @@ export const projectsPlugin: PluginManifest = {
           method: "GET",
           path: "/projects",
           permission: "project:read",
-          summary: "获取项目列表",
-          handler: async () => ({ body: await repo.listProjects() })
+          summary: "获取项目列表（角色过滤：学生看已加入的，教授看管理的，管理员看全部）",
+          handler: async ({ actor }) => {
+            const all = await repo.listProjects();
+            if (!actor || actor.role === "lab_admin") return { body: all };
+            const memberIds = await repo.listMemberProjectIds(actor.id);
+            return { body: all.filter((p) => memberIds.has(p.id)) };
+          }
         },
         // GET /projects/:id
         {
@@ -628,16 +782,24 @@ export const projectsPlugin: PluginManifest = {
             const req = body as Partial<ProjectCreateRequest>;
             if (!req.name?.trim()) return { status: 400, body: { error: "项目名称不能为空" } };
 
+            const isAdmin = actor.role === "lab_admin";
             const project = await repo.createProject({
               name: req.name.trim(),
               description: req.description?.trim() ?? "",
               ownerId: actor.id,
               ownerName: actor.displayName ?? actor.username ?? actor.id,
-              memberIds: [...new Set([actor.id, ...(req.memberIds ?? [])])],
               startsAt: req.startsAt,
               endsAt: req.endsAt,
-              status: "active"
+              status: isAdmin ? "active" : "pending"
             });
+
+            // Auto-add creator as project member
+            await repo.addMember(
+              project.id,
+              actor.id,
+              actor.displayName ?? actor.username ?? actor.id,
+              "manager"
+            );
 
             await context.eventBus.publish(
               createDomainEvent("projects", "projects.project.created", {
@@ -666,14 +828,13 @@ export const projectsPlugin: PluginManifest = {
           handler: async ({ actor, params, body }) => {
             if (!actor) return { status: 401, body: { error: "Unauthorized" } };
             const req = body as Partial<ProjectUpdateRequest>;
-            const project = await repo.updateProject(params.id, {
-              name: req.name?.trim(),
-              description: req.description?.trim(),
-              memberIds: req.memberIds,
-              startsAt: req.startsAt,
-              endsAt: req.endsAt,
-              status: req.status
-            });
+            const updateInput: Partial<ProjectUpdateRequest> = {};
+            if (req.name !== undefined) updateInput.name = req.name?.trim();
+            if (req.description !== undefined) updateInput.description = req.description?.trim();
+            if (req.startsAt !== undefined) updateInput.startsAt = req.startsAt;
+            if (req.endsAt !== undefined) updateInput.endsAt = req.endsAt;
+            if (req.status !== undefined) updateInput.status = req.status;
+            const project = await repo.updateProject(params.id, updateInput as any);
             if (!project) return { status: 404, body: { error: "项目未找到" } };
 
             await context.eventBus.publish(
@@ -688,6 +849,34 @@ export const projectsPlugin: PluginManifest = {
             });
 
             return { body: project };
+          }
+        },
+        // GET /projects/:id/members
+        {
+          method: "GET", path: "/projects/:id/members", permission: "project:read",
+          summary: "获取项目成员",
+          handler: async ({ params }) => ({ body: await repo.listMembers(params.id) })
+        },
+        // GET /projects/:id/progress
+        {
+          method: "GET", path: "/projects/:id/progress", permission: "project:read",
+          summary: "获取进度报告",
+          handler: async ({ params }) => ({ body: await repo.listProgress(params.id) })
+        },
+        // POST /projects/:id/progress
+        {
+          method: "POST", path: "/projects/:id/progress", permission: "project:progress",
+          summary: "上传进度报告",
+          handler: async ({ actor, params, body }) => {
+            if (!actor) return { status: 401, body: { error: "Unauthorized" } };
+            const req = body as any;
+            if (!req.title?.trim()) return { status: 400, body: { error: "title required" } };
+            const report = await repo.createProgress(
+              params.id, actor.id,
+              actor.displayName ?? actor.username ?? "",
+              req.title, req.content ?? ""
+            );
+            return { status: 201, body: report };
           }
         },
         // GET /projects/:id/tasks

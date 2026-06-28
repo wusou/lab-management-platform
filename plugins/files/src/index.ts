@@ -280,6 +280,7 @@ class PostgresFileRepository implements FileRepository {
       ALTER TABLE files.lab_file ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'public';
       ALTER TABLE files.lab_file ADD COLUMN IF NOT EXISTS storage_provider TEXT NOT NULL DEFAULT 'external_link';
       ALTER TABLE files.lab_file ADD COLUMN IF NOT EXISTS owner_name TEXT NOT NULL DEFAULT '';
+      ALTER TABLE files.lab_file ADD COLUMN IF NOT EXISTS project_id TEXT;
       ALTER TABLE files.lab_file ADD COLUMN IF NOT EXISTS current_version INTEGER NOT NULL DEFAULT 0;
       ALTER TABLE files.lab_file ADD COLUMN IF NOT EXISTS latest_version_id TEXT;
       ALTER TABLE files.lab_file ADD COLUMN IF NOT EXISTS original_name TEXT;

@@ -24,6 +24,7 @@ interface InventoryPanelProps {
   setReason: (v: string) => void;
   loading: boolean;
   canApprove: boolean;
+  canStock: boolean;
   stockInQuantity: number;
   setStockInQuantity: (v: number) => void;
   displayedApplications: InventoryApplication[];
@@ -40,6 +41,7 @@ interface InventoryPanelProps {
   onSubmitApplication: (e: SyntheticEvent<HTMLFormElement>) => void;
   onStockIn: () => void;
   onReviewApplication: (id: string, action: "approve" | "reject") => void;
+  projectMap: Record<string, string>;
 }
 
 export function InventoryPanel({
@@ -54,6 +56,7 @@ export function InventoryPanel({
   setReason,
   loading,
   canApprove,
+  canStock,
   stockInQuantity,
   setStockInQuantity,
   displayedApplications,
@@ -168,7 +171,7 @@ export function InventoryPanel({
             {loading ? "处理中..." : "提交申请"}
           </button>
 
-          {canApprove ? (
+          {canStock ? (
             <div className="stock-in">
               <label>
                 入库数量

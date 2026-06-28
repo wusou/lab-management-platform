@@ -30,9 +30,9 @@ export function statusText(status: ApplicationStatus) {
 
 export function roleText(role: Role): string {
   const map: Record<Role, string> = {
-    super_admin: "超级管理员",
-    admin: "管理员",
-    member: "成员"
+    student: "学生",
+    professor: "教授",
+    lab_admin: "实验室管理员"
   };
   return map[role];
 }
@@ -89,45 +89,45 @@ export function formatFileSize(sizeBytes?: number) {
 }
 
 export const permissionLabels: Record<Permission, string> = {
-  "user:read": "查看账号",
-  "user:write": "管理账号",
+  "user:read": "查看用户",
+  "user:write": "管理用户",
   "inventory:read": "查看库存",
-  "inventory:write": "库存审批",
+  "inventory:apply": "申请领用",
+  "inventory:approve": "审批申请",
+  "inventory:stock": "入库登记",
   "file:read": "查看文件",
   "file:write": "管理文件",
   "project:read": "查看项目",
   "project:write": "管理项目",
+  "project:progress": "上传进度",
   "meeting:read": "查看会议",
   "meeting:write": "管理会议",
-  "ai:use": "使用 AI"
+  "ai:use": "使用 AI",
+  "ai:manage": "管理知识库"
 };
 
 export const rolePermissions: Record<Role, Permission[]> = {
-  super_admin: [
+  lab_admin: [
+    "user:read", "user:write",
+    "inventory:read", "inventory:apply", "inventory:approve", "inventory:stock",
+    "file:read", "file:write",
+    "project:read", "project:write", "project:progress",
+    "meeting:read", "meeting:write",
+    "ai:use", "ai:manage"
+  ],
+  professor: [
     "user:read",
-    "user:write",
-    "inventory:read",
-    "inventory:write",
-    "file:read",
-    "file:write",
-    "project:read",
-    "project:write",
-    "meeting:read",
-    "meeting:write",
+    "inventory:read", "inventory:apply", "inventory:approve",
+    "file:read", "file:write",
+    "project:read", "project:write",
+    "meeting:read", "meeting:write",
     "ai:use"
   ],
-  admin: [
-    "user:read",
-    "user:write",
-    "inventory:read",
-    "inventory:write",
+  student: [
+    "inventory:read", "inventory:apply",
     "file:read",
-    "file:write",
     "project:read",
-    "project:write",
     "meeting:read",
-    "meeting:write",
     "ai:use"
-  ],
-  member: ["inventory:read", "file:read", "project:read", "meeting:read", "ai:use"]
+  ]
 };

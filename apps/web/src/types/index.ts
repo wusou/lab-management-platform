@@ -1,15 +1,20 @@
-export type Role = "super_admin" | "admin" | "member";
+export type Role = "student" | "professor" | "lab_admin";
 export type Permission =
   | "user:read"
   | "user:write"
   | "inventory:read"
-  | "inventory:write"
+  | "inventory:apply"
+  | "inventory:approve"
+  | "inventory:stock"
   | "file:read"
   | "file:write"
   | "project:read"
   | "project:write"
+  | "project:progress"
   | "meeting:read"
   | "meeting:write"
+  | "ai:use"
+  | "ai:manage";
   | "ai:use";
 export type ApplicationStatus = "pending" | "approved" | "rejected";
 

@@ -1,17 +1,21 @@
-export type Role = "super_admin" | "admin" | "member";
+export type Role = "student" | "professor" | "lab_admin";
 
 export type Permission =
   | "user:read"
   | "user:write"
   | "inventory:read"
-  | "inventory:write"
+  | "inventory:apply"      // 申请领用
+  | "inventory:approve"     // 审批申请
+  | "inventory:stock"       // 入库登记
   | "file:read"
   | "file:write"
   | "project:read"
   | "project:write"
+  | "project:progress"      // 上传进度报告
   | "meeting:read"
   | "meeting:write"
-  | "ai:use";
+  | "ai:use"
+  | "ai:manage";            // 管理知识库
 
 export interface Actor {
   id: string;
@@ -41,6 +45,14 @@ export interface ManagedUser {
   createdAt: string;
 }
 
+/** 项目-用户关联（多对多） */
+export interface ProjectMember {
+  projectId: string;
+  userId: string;
+  memberRole: "leader" | "member" | "advisor" | "manager";
+  joinedAt: string;
+}
+
 export interface AuthPort {
   login?(username: string, password: string): Promise<{ token: string; actor: Actor } | null>;
   registerLocalUser?(request: LocalUserRegistrationRequest): Promise<Actor>;
@@ -50,7 +62,7 @@ export interface AuthPort {
   updateContact?(actorId: string, phone: string): Promise<ManagedUser>;
   resetUserPassword?(targetUserId: string, newPassword: string): Promise<void>;
   deactivateUser?(targetUserId: string): Promise<void>;
-  updateUserRole?(targetUserId: string, role: Exclude<Role, "super_admin">): Promise<ManagedUser>;
+  updateUserRole?(targetUserId: string, role: Role): Promise<ManagedUser>;
   authenticate(token: string): Promise<Actor | null>;
   assertPermission(actor: Actor, permission: Permission): void;
 }

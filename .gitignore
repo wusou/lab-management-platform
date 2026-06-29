@@ -40,7 +40,12 @@ logs/
 # Test coverage
 coverage/
 
+# MCP config (local machine paths)
+.mcp.json
+CLAUDE.md
+
 # Temp files
 *.tmp
 *.temp
 images.tar
+

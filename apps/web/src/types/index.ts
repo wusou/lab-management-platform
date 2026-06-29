@@ -43,6 +43,7 @@ export interface InventoryApplication {
   materialName: string;
   applicantId: string;
   applicantName: string;
+  projectId?: string;
   quantity: number;
   reason: string;
   status: ApplicationStatus;

@@ -540,6 +540,12 @@ export function App() {
     return () => window.clearTimeout(timeoutId);
   }, [canManageUsers, userSearch, token, showInactiveAccounts]);
 
+  const projectMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const p of projectList) map[p.id] = p.name;
+    return map;
+  }, [projectList]);
+
   const selectedMaterial = useMemo(
     () => materials.find((material) => material.id === selectedMaterialId),
     [materials, selectedMaterialId]
@@ -1399,6 +1405,7 @@ export function App() {
           onSubmitApplication={submitApplication}
           onStockIn={stockInMaterial}
           onReviewApplication={reviewApplication}
+          projectMap={projectMap}
         />
 
         <FilePanel

@@ -72,7 +72,8 @@ export function InventoryPanel({
   setMovementTypeFilter,
   onSubmitApplication,
   onStockIn,
-  onReviewApplication
+  onReviewApplication,
+  projectMap
 }: InventoryPanelProps) {
   return (
     <>
@@ -213,6 +214,7 @@ export function InventoryPanel({
                 <strong>{application.materialName}</strong>
                 <small>{application.reason}</small>
               </span>
+              <span>{projectMap[application.projectId ?? ""] ?? "-"}</span>
               <span>{application.applicantName}</span>
               <span>{application.quantity}</span>
               <span>
